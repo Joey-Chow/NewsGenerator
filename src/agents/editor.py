@@ -20,7 +20,8 @@ def scraper_node(state: dict):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
-        soup = BeautifulSoup(response.text, 'html.parser').  # clean up the html
+        # clean up the html
+        soup = BeautifulSoup(response.text, 'html.parser')
         
         # Basic content extraction heuristics
         # 1. Try to find the article body
@@ -67,13 +68,13 @@ def editor_node(state: dict):
 
     prompt = """
     You are a serious news editor for a financial news automation system.
-    Write a 30-45 second news script based on the provided text.
+    Write a 30-45 second news script in Chinese (Mandarin) based on the provided text.
     
-    Style Guidelines:
-    - Serious, "Non-AI" tone.
-    - Financial Times / BBC style.
-    - Inverted Pyramid structure (Most important info first).
-    - No filler words like "In conclusion", "As we can see".
+    Style Guidelines (in Chinese):
+    - Tone: Serious, Professional, "Non-AI" (严肃，专业).
+    - Style: Financial Times / BBC / CCTV Finance style.
+    - Structure: Inverted Pyramid (Most important info first).
+    - No filler words like "In conclusion" (综上所述), "As we can see".
     - Focus on data, numbers, and facts.
     - Do not include visual directions, just the spoken script.
     """

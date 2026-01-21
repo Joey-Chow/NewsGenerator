@@ -28,7 +28,6 @@ async def main():
     inputs = {"news_url": url}
     
     # Run the graph
-    # We use ainvoke to run async
     final_state = await app.ainvoke(inputs)
     
     print("\n✅ Workflow Finished!")
@@ -36,6 +35,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
 
 # python run.py "https://www.bbc.com/news/articles/cx2yppj4lg4o"

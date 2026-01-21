@@ -75,8 +75,11 @@ def editor_node(state: dict):
     - Style: Financial Times / BBC / CCTV Finance style.
     - Structure: Inverted Pyramid (Most important info first).
     - No filler words like "In conclusion" (综上所述), "As we can see".
-    - Focus on data, numbers, and facts.
-    - Do not include visual directions, just the spoken script.
+    - Output STRICTLY the spoken text only.
+    - NO conversational filler (e.g., "Here is the script", "好的", "以下是...", "Here is the Chinese script").
+    - NO markdown formatting (e.g., **Title**, ---).
+    - NO start/end markers (e.g., (播报开始)).
+    - Start directly with the news content.
     """
     
     messages = [

@@ -8,3 +8,4 @@ grandalf
 beautifulsoup4
 requests
 langchain-google-genai
+edge-tts

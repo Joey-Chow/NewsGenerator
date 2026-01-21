@@ -1,0 +1,10 @@
+langgraph
+langchain
+langchain-openai
+playwright
+pydantic
+python-dotenv
+grandalf
+beautifulsoup4
+requests
+langchain-google-genai

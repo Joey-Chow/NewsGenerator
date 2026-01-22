@@ -1,46 +1,80 @@
 import asyncio
 import os
+import sys
+
+# Ensure src is in pythonpath
+sys.path.append(os.getcwd())
+
 from src.agents.renderer import video_renderer_node
 
-# Mock State for testing
-mock_state = {
-    "script_draft": "这是一段测试音频。我们正在验证视频渲染器是否能够正常工作。如果成功，您应该能看到视频生成。",
-    "screenshot_paths": ["output/screenshot/screenshot_972b4e0e.png"], # Use a recent screenshot if available
-    "audio_path": "output/audio/test_audio.mp3" # Synthetic path, we might need to verify if reporter needs to run or we mock audio
-}
+async def main():
+    # Assets provided by user
+    script_file = "output/script/script_0dcc05f5.txt"
+    screenshot_file = "output/screenshot/screenshot_9e7f8519.png"
+    audio_file = "output/audio/audio_effa76bd.mp3"
+    
+    # Derive captions path (assuming standard naming convention)
+    # output/audio/captions_{file_id}.json
+    # parsing audio filename to get ID
+    audio_basename = os.path.basename(audio_file) # audio_effa76bd.mp3
+    file_id = audio_basename.replace("audio_", "").replace(".mp3", "")
+    captions_file = f"output/audio/captions_{file_id}.json"
+    
+    if not os.path.exists(captions_file):
+        print(f"Warning: Captions file {captions_file} not found. Video will be rendered without captions.")
+        captions_file = None
+    else:
+        print(f"Found captions file: {captions_file}")
 
-async def test_renderer():
-    print("🧪 Testing Video Renderer Node...")
+    # Read Script (Support JSON or TXT)
+    script_sentences = []
     
-    # Check if we need to generate audio first? 
-    # Since we separated reporter, renderer EXPECTS audio_path to exist.
-    # So we should probably either mock a file or run reporter first.
-    # Let's run reporter first to be safe, or just mock a file if one exists.
+    # Check for JSON version first or if filename is .json
+    if script_file.endswith(".json"):
+        if os.path.exists(script_file):
+             import json
+             with open(script_file, "r", encoding="utf-8") as f:
+                 data = json.load(f)
+                 script_sentences = data.get("sentences", [])
+                 script_content = "。".join(script_sentences) + "。"
+        else:
+             print(f"Error: Script JSON {script_file} not found.")
+             return
+    elif os.path.exists(script_file):
+         # TXT Fallback
+         with open(script_file, "r", encoding="utf-8") as f:
+             script_content = f.read()
+         # Mock sentences for testing old txt files
+         import re
+         # Split by punctuation
+         raw = re.split(r'([。！？!?\n])', script_content)
+         for i in range(0, len(raw), 2):
+             s = raw[i].strip()
+             if s:
+                 script_sentences.append(s)
+    else:
+        print(f"Error: Script file {script_file} not found.")
+        return
+
+    # Mock State
+    state = {
+        "script_draft": script_content,
+        "screenshot_paths": [screenshot_file],
+        "audio_path": audio_file,
+        "captions_path": captions_file,
+        "sentences": script_sentences
+    }
+
+    print("--- Starting Renderer Test ---")
+    print(f"Script: {script_file}")
+    print(f"Screenshot: {screenshot_file}")
+    print(f"Audio: {audio_file}")
+    print(f"Captions: {captions_file}")
     
-    # For this test, let's reuse a previous audio file if it exists, or generate one quickly.
-    # Actually, simpler to just run reporter then renderer to test that flow without LLM.
+    result = await video_renderer_node(state)
     
-    from src.agents.reporter import reporter_node
-    
-    print("1. Running Reporter (TTS)...")
-    reporter_out = await reporter_node(mock_state)
-    print(f"Reporter Output: {reporter_out}")
-    
-    # Update state with reporter output
-    mock_state.update(reporter_out)
-    
-    print("2. Running Renderer (Remotion)...")
-    # Make sure we have a valid screenshot path, else create a placeholder
-    if not os.path.exists(mock_state["screenshot_paths"][0]):
-        print("Warning: Screenshot not found, using placeholder logic in renderer.")
-        # But renderer might fail if we don't have a real file to copy.
-        # Let's create a dummy file if needed.
-        os.makedirs("output/screenshot", exist_ok=True)
-        with open(mock_state["screenshot_paths"][0], "w") as f:
-            f.write("dummy image") # This won't render well in video but avoids crash on copy
-            
-    result = await video_renderer_node(mock_state)
-    print(f"✅ Renderer Output: {result}")
+    print("--- Test Complete ---")
+    print(f"Result: {result}")
 
 if __name__ == "__main__":
-    asyncio.run(test_renderer())
+    asyncio.run(main())

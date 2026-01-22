@@ -34,6 +34,16 @@ async def video_renderer_node(state: dict):
     dest_audio = os.path.join(public_dir, audio_filename)
     print(f"Renderer: Copying audio from {output_audio_path} to {dest_audio}")
     shutil.copy(output_audio_path, dest_audio)
+
+    # Captions
+    captions_path = state.get("captions_path")
+    captions_filename = ""
+    dest_captions = ""
+    if captions_path and os.path.exists(captions_path):
+        captions_filename = os.path.basename(captions_path)
+        dest_captions = os.path.join(public_dir, captions_filename)
+        print(f"Renderer: Copying captions from {captions_path} to {dest_captions}")
+        shutil.copy(captions_path, dest_captions)
     
     # Screenshot
     screenshot_path = screenshots[0] if screenshots else "placeholder.png"
@@ -53,7 +63,9 @@ async def video_renderer_node(state: dict):
     props = {
         "audioPath": args_audio_path,
         "screenshotPath": args_screenshot_path,
-        "text": script
+        "text": script,
+        "captionsPath": captions_filename,
+        "sentences": state.get("sentences", [])
     }
     props_json = json.dumps(props)
 

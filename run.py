@@ -36,4 +36,5 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 
+# source .venv/bin/activate
 # python run.py "https://www.bbc.com/news/articles/cx2yppj4lg4o"

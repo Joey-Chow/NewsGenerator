@@ -1,4 +1,4 @@
-import { AbsoluteFill, Composition, Sequence, Img, Audio, Video, staticFile, useVideoConfig, getInputProps } from 'remotion';
+import { AbsoluteFill, Composition, Sequence, Img, Audio, Video, staticFile, useVideoConfig, getInputProps, OffthreadVideo } from 'remotion';
 import React from 'react';
 import './style.css';
 
@@ -15,6 +15,7 @@ type NewsVideoProps = {
     scenes: SceneProp[];
     title?: string;
     musicMood?: string;
+    backgroundVideo?: string;
 }
 
 const NewsScene: React.FC<SceneProp> = ({ text, image, audio }) => {
@@ -22,40 +23,29 @@ const NewsScene: React.FC<SceneProp> = ({ text, image, audio }) => {
     const isVideo = image && (image.endsWith('.mp4') || image.endsWith('.mov') || image.endsWith('.webm'));
 
     return (
-        <AbsoluteFill style={{ backgroundColor: 'black' }}>
-            {/* Visual Layer (Image or Video) */}
-            <div style={{ position: 'absolute', top: 0, width: '100%', height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                {image && (
-                    isVideo ? (
-                        // @ts-ignore
-                        <Video src={staticFile(image)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                    ) : (
-                        // @ts-ignore
-                        <Img src={staticFile(image)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                    )
-                )}
+        <AbsoluteFill className="bg-transparent">
+            {/* Visual Layer (Image or Video) - Floating Frame */}
+            <div className="visual-layer-wrapper">
+                {/* Floating Frame Container */}
+                <div className="floating-frame">
+                    {/* Inset Stroke Overlay */}
+                    <div className="inset-overlay" />
+
+                    {image && (
+                        isVideo ? (
+                            // @ts-ignore
+                            <Video src={staticFile(image)} className="visual-asset" />
+                        ) : (
+                            // @ts-ignore
+                            <Img src={staticFile(image)} className="visual-asset" />
+                        )
+                    )}
+                </div>
             </div>
 
-            {/* Text Layer (Subtitle) */}
-            <div style={{
-                position: 'absolute',
-                bottom: 0,
-                width: '100%',
-                height: '20%',
-                backgroundColor: 'rgba(0,0,0,0.9)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                padding: '0 40px'
-            }}>
-                <h1 style={{
-                    color: 'white',
-                    fontFamily: 'Helvetica, Arial, sans-serif',
-                    fontSize: 40,
-                    lineHeight: 1.2,
-                    textAlign: 'center',
-                    margin: 0
-                }}>
+            {/* Text Layer (Subtitle) - Frosted Glass Bar */}
+            <div className="subtitle-bar">
+                <h1 className="subtitle-text">
                     {text}
                 </h1>
             </div>
@@ -88,21 +78,43 @@ const NewsSequence: React.FC<NewsVideoProps> = (props) => {
 
     let currentFrame = 0;
 
+    const bgVideo = props.backgroundVideo || inputProps.backgroundVideo;
+
     return (
         <AbsoluteFill>
-            {scenes.map((scene) => {
-                // Ensure duration is valid
-                const safeDuration = scene.duration > 0 ? scene.duration : 5;
-                const durationInFrames = Math.ceil(safeDuration * fps);
-                const from = currentFrame;
-                currentFrame += durationInFrames;
+            {/* Dynamic Motion Background Layer */}
+            {bgVideo && (
+                <AbsoluteFill style={{ zIndex: 0 }}>
+                    <OffthreadVideo
+                        src={staticFile(bgVideo)}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                        }}
+                        playbackRate={0.3}
+                    // Note: If video is shorter than composition, we might need a Loop, 
+                    // but sticking to base requirement first.
+                    />
+                </AbsoluteFill>
+            )}
 
-                return (
-                    <Sequence key={scene.id} from={from} durationInFrames={durationInFrames}>
-                        <NewsScene {...scene} />
-                    </Sequence>
-                );
-            })}
+            {/* Content Layer */}
+            <AbsoluteFill style={{ zIndex: 1 }}>
+                {scenes.map((scene) => {
+                    // Ensure duration is valid
+                    const safeDuration = scene.duration > 0 ? scene.duration : 5;
+                    const durationInFrames = Math.ceil(safeDuration * fps);
+                    const from = currentFrame;
+                    currentFrame += durationInFrames;
+
+                    return (
+                        <Sequence key={scene.id} from={from} durationInFrames={durationInFrames}>
+                            <NewsScene {...scene} />
+                        </Sequence>
+                    );
+                })}
+            </AbsoluteFill>
         </AbsoluteFill>
     );
 };

@@ -1,7 +1,6 @@
 from langgraph.graph import StateGraph, END
 from src.state import AgentState
 from src.agents.editor import editor_node, scraper_node
-from src.agents.photographer import photographer_node # Optional now?
 from src.agents.renderer import video_renderer_node
 from src.agents.reporter import reporter_node
 from src.agents.asset_scraper import asset_scraper_node

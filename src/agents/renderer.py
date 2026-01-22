@@ -3,6 +3,8 @@ import subprocess
 import asyncio
 import json
 import shutil
+import random
+import glob
 from src.state import Storyboard, Scene
 
 async def video_renderer_node(state: dict):
@@ -26,7 +28,25 @@ async def video_renderer_node(state: dict):
     created_files = [] # Track for cleanup
 
     print("Renderer: Copying assets to public/...")
-    
+
+    # Process Background Video
+    bg_public_name = None
+    # Support multiple extensions
+    bg_files = []
+    for ext in ["mp4", "mov", "webm"]:
+         bg_files.extend(glob.glob(f"assets/background/*.{ext}"))
+         
+    if bg_files:
+        bg_source = random.choice(bg_files)
+        bg_filename = f"background_{os.urandom(4).hex()}.mp4"
+        dest_bg = os.path.join(public_dir, bg_filename)
+        shutil.copy(bg_source, dest_bg)
+        bg_public_name = bg_filename
+        created_files.append(dest_bg)
+        print(f"Renderer: Using background video: {os.path.basename(bg_source)}")
+    else:
+        print("Renderer: No background videos found in assets/background/")
+
     # Sort scenes by ID just in case
     storyboard.scenes.sort(key=lambda s: s.id)
     
@@ -67,7 +87,8 @@ async def video_renderer_node(state: dict):
     props = {
         "scenes": render_scenes,
         "title": storyboard.title,
-        "musicMood": storyboard.background_music_mood
+        "musicMood": storyboard.background_music_mood,
+        "backgroundVideo": bg_public_name
     }
     props_json = json.dumps(props)
 

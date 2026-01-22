@@ -1,4 +1,5 @@
 output/
+assets/
 remotion_project/public/*
 .env
 .venv

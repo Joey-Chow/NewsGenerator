@@ -1,7 +1,4 @@
-output/script/*
-output/screenshot/*
-output/clip/*
-output/audio/*
+output/
 remotion_project/public/*
 .env
 .venv

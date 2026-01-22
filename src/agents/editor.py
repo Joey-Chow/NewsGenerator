@@ -70,22 +70,40 @@ def editor_node(state: dict):
     import re
 
     prompt = """
-    You are a serious news editor for a financial news automation system.
-    Generate a JSON output containing a list of sentences in Chinese (Mandarin) based on the provided text.
+    You are a professional News Editor and Director. 
+    Your task is to transform the provided news article into a video storyboard (JSON format).
+
+    Input: A news article text.
+    Output: A JSON object matching the following structure:
+    {
+      "scenes": [
+        {
+          "id": 1,
+          "subtitle_text": "First sentence of the script...", 
+          "visual_instruction": "Instruction for the human editor (e.g. 'Slice the inflation chart from the original article' or 'Find a photo of Powell')."
+        },
+        ...
+      ],
+      "title": "Short Video Title",
+      "background_music_mood": "Mood description (e.g. suspenseful, upbeat)"
+    }
+
+    Guidelines:
+    1. **Script (subtitle_text)**:
+       - Language: Chinese (Mandarin).
+       - Tone: Serious, Professional.
+       - The FIRST scene's subtitle MUST explicitly cite the source.
+       - Max 5-8 scenes total.
+       - Each scene is one spoken sentence. 
+       - NO trailing punctuation (strip '。').
     
-    Output Format:
-    A single valid JSON object: {"sentences": ["Sentence 1", "Sentence 2", ...]}
-    
-    Style Guidelines (in Chinese):
-    - Tone: Serious, Professional, "Non-AI" (严肃，专业).
-    - Style: Financial Times / BBC / CCTV Finance style.
-    - Structure: Inverted Pyramid (Most important info first).
-    - Maximum of 5 sentences.
-    - No filler words like "In conclusion" (综上所述), "As we can see".
-    - CRITICAL: The FIRST sentence MUST explicitly cite the source of the article (e.g., 'According to BBC News...', 'Reuters reports that...').
-    - Split the news into clear, spoken sentences.
-    - CRITICAL: Strip any trailing punctuation (period, exclamation, question mark) from the end of each sentence string in the JSON list.
-    - The generated content should be the spoken script.
+    2. **Visuals (visual_instruction)**:
+       - Language: Chinese (Preferred) or English.
+       - Actionable instructions for a human editor. 
+       - Examples: "截取文章中的股价走势图", "寻找一张相关的各种外币的图片".
+       
+    3. **General**:
+       - Return ONLY valid JSON.
     """
     
     messages = [
@@ -93,42 +111,42 @@ def editor_node(state: dict):
         HumanMessage(content=f"Source URL: {news_url}\n\nContent:\n{raw_text}")
     ]
     
-    print("Editor: Invoking LLM for JSON script...")
-    response = llm.invoke(messages)
-    content = response.content
-    
-    # Parse JSON
-    try:
-        # Helper to find JSON block if it's wrapped in markdown code fence
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        if json_match:
-            content = json_match.group(0)
-            
-        data = json.loads(content)
-        sentences = data.get("sentences", [])
-    except Exception as e:
-        print(f"Editor: Failed to parse JSON response: {content[:100]}... Error: {e}")
-        # Fallback: treat whole content as one sentence (maybe split by newlines)
-        sentences = [content.strip()]
+    print("Editor: Invoking LLM for Storyboard...")
+    from src.state import Storyboard, Scene
 
-    # Reconstruct script_draft for TTS (add periods back for flow, if needed, or just space)
-    # TTS usually handles spaces or newlines. Let's add periods back for safer TTS pausing if they were stripped.
-    # Note: Chinese period is "。" 
-    script_draft = "。".join(sentences) + "。"
-    
-    # Save script to file (now JSON)
-    os.makedirs("output/script", exist_ok=True)
+    storyboard = None
+    try:
+        if ConfiguredLLM := getattr(llm, "with_structured_output", None):
+             structured_llm = llm.with_structured_output(Storyboard)
+             storyboard = structured_llm.invoke(messages)
+    except Exception as e:
+        print(f"Editor: Structured output failed: {e}")
+
+    if not storyboard:
+        # Manual parsing
+        response = llm.invoke(messages)
+        content = response.content
+        try:
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match: content = json_match.group(0)
+            data = json.loads(content)
+            # Handle if it's wrapped in 'storyboard' key or direct
+            if "scenes" not in data and "storyboard" in data:
+                data = data["storyboard"]
+            storyboard = Storyboard(**data)
+        except Exception as e:
+             print(f"Editor: Manual parsing failed: {e}. Content: {content[:100]}")
+             # Create dummy
+             storyboard = Storyboard(scenes=[], title="Error", background_music_mood="Error")
+
+    # Save
+    os.makedirs("output/storyboard", exist_ok=True)
     file_id = os.urandom(4).hex()
-    script_json_path = f"output/script/script_{file_id}.json"
+    storyboard_path = f"output/storyboard/storyboard_{file_id}.json"
     
-    with open(script_json_path, "w", encoding='utf-8') as f:
-        json.dump({"sentences": sentences}, f, ensure_ascii=False, indent=2)
+    with open(storyboard_path, "w", encoding='utf-8') as f:
+        f.write(storyboard.model_dump_json(indent=2))
+        
+    print(f"Editor: Storyboard generated ({len(storyboard.scenes)} scenes). Saved to {storyboard_path}")
     
-    print(f"Editor: Script generated ({len(sentences)} sentences). Saved to {script_json_path}")
-    
-    # We return script_draft (string) for Reporter (TTS) and sentences (list) for Renderer (Visuals)
-    return {
-        "script_draft": script_draft, 
-        "script_path": script_json_path, 
-        "sentences": sentences
-    }
+    return {"storyboard": storyboard}

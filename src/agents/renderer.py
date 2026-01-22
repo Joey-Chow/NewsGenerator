@@ -1,48 +1,61 @@
 import os
 import subprocess
 import asyncio
-import edge_tts
 import json
 
 async def video_renderer_node(state: dict):
     print("Renderer: Starting generation...")
     script = state.get("script_draft", "")
     screenshots = state.get("screenshot_paths", [])
+    output_audio_path = state.get("audio_path", "")
     
-    if not script:
-        print("Renderer: No script found.")
+    if not script or not output_audio_path:
+        print("Renderer: Missing script or audio.")
         return {}
 
-    # 1. Generate Audio (MP3)
-    output_audio_path = f"output/clip/audio_{os.urandom(4).hex()}.mp3"
-    os.makedirs("output/clip", exist_ok=True)
-    
-    # We use a standard English voice for now, or detect Chinese if needed.
-    # User asked for Chinese script, so let's use a Chinese voice.
-    voice = "zh-CN-YunxiNeural" 
-    
-    print(f"Renderer: Generating TTS to {output_audio_path}...")
-    communicate = edge_tts.Communicate(script, voice)
-    await communicate.save(output_audio_path)
-    
     # 2. Render Video (Remotion)
     print("Renderer: Calling Remotion...")
     output_video_path = f"output/clip/video_{os.urandom(4).hex()}.mp4"
     
-    # Prepare Inputs
-    # Get absolute paths to be safe for Remotion
-    abs_audio = os.path.abspath(output_audio_path)
-    abs_screenshot = os.path.abspath(screenshots[0]) if screenshots else "https://via.placeholder.com/1280x720"
+    # Prepare working directory
+    cwd = os.path.join(os.getcwd(), "remotion_project")
+    public_dir = os.path.join(cwd, "public")
+    os.makedirs(public_dir, exist_ok=True)
     
+    # Copy assets to public/ to avoid local file permission issues in Remotion
+    import shutil
+    
+    # Audio
+    audio_filename = os.path.basename(output_audio_path)
+    if not os.path.exists(output_audio_path):
+         print(f"Renderer Error: Audio file missing at {output_audio_path}")
+         return {}
+    
+    dest_audio = os.path.join(public_dir, audio_filename)
+    print(f"Renderer: Copying audio from {output_audio_path} to {dest_audio}")
+    shutil.copy(output_audio_path, dest_audio)
+    
+    # Screenshot
+    screenshot_path = screenshots[0] if screenshots else "placeholder.png"
+    screenshot_filename = os.path.basename(screenshot_path)
+    if screenshots and os.path.exists(screenshot_path):
+        dest_ss = os.path.join(public_dir, screenshot_filename)
+        print(f"Renderer: Copying screenshot from {screenshot_path} to {dest_ss}")
+        shutil.copy(screenshot_path, dest_ss)
+    else:
+        print(f"Renderer Warning: Screenshot missing at {screenshot_path}")
+
+    print(f"Renderer: Contents of {public_dir}: {os.listdir(public_dir)}")
+    
+    args_audio_path = audio_filename 
+    args_screenshot_path = screenshot_filename
+
     props = {
-        "audioPath": abs_audio,
-        "screenshotPath": abs_screenshot,
+        "audioPath": args_audio_path,
+        "screenshotPath": args_screenshot_path,
         "text": script
     }
     props_json = json.dumps(props)
-    
-    # Prepare working directory
-    cwd = os.path.join(os.getcwd(), "remotion_project")
 
     # Command to render
     cmd = [
@@ -50,7 +63,7 @@ async def video_renderer_node(state: dict):
         "src/index.tsx", "NewsVideo",
         os.path.abspath(output_video_path),
         "--props", props_json,
-        "--gl", "swangle"
+        "--log", "verbose"
     ]
     
     # Check if node_modules exists, if not install. 
@@ -73,3 +86,16 @@ async def video_renderer_node(state: dict):
     except subprocess.CalledProcessError as e:
         print(f"Renderer Error: {e}")
         return {"error": str(e)}
+    finally:
+        # Cleanup copied assets in public/
+        print("Renderer: Cleaning up public assets...")
+        try:
+            if os.path.exists(dest_audio):
+                os.remove(dest_audio)
+            # Check if dest_ss was defined (it's inside an if block in original code)
+            # We recreate the path to be safe or verify existence
+            cleanup_ss = os.path.join(public_dir, screenshot_filename)
+            if os.path.exists(cleanup_ss) and screenshot_filename != "placeholder.png":
+                os.remove(cleanup_ss)
+        except Exception as cleanup_err:
+             print(f"Renderer Warning: Cleanup failed: {cleanup_err}")

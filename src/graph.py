@@ -3,6 +3,7 @@ from src.state import AgentState
 from src.agents.editor import editor_node, scraper_node
 from src.agents.photographer import photographer_node
 from src.agents.renderer import video_renderer_node
+from src.agents.reporter import reporter_node
 
 def human_review_node(state: AgentState):
     # This node doesn't do much logic, it serves as a breakpoint
@@ -21,6 +22,7 @@ def build_graph():
     workflow.add_node("scraper", scraper_node)
     workflow.add_node("editor", editor_node)
     workflow.add_node("photographer", photographer_node)
+    workflow.add_node("reporter", reporter_node) # Added reporter_node
     workflow.add_node("human_review", human_review_node)
     workflow.add_node("video_renderer", video_renderer_node)
 
@@ -28,7 +30,8 @@ def build_graph():
     workflow.set_entry_point("scraper")
     workflow.add_edge("scraper", "editor")
     workflow.add_edge("editor", "photographer")
-    workflow.add_edge("photographer", "human_review")
+    workflow.add_edge("photographer", "reporter") # Changed edge
+    workflow.add_edge("reporter", "human_review") # Added new edge
     
     # Conditional logic example: 
     # In a real app, we might use interrupt_before=["video_renderer"] 

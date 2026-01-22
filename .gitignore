@@ -1,5 +1,8 @@
 output/script/*
 output/screenshot/*
+output/clip/*
+output/audio/*
+remotion_project/public/*
 .env
 .venv
 __pycache__

@@ -8,6 +8,7 @@ import './style.css';
 import { getInputProps } from 'remotion';
 
 const data = getInputProps();
+console.log("Remotion Input Props:", data);
 
 const NewsScene: React.FC = () => {
     const { width, height } = useVideoConfig();
@@ -30,29 +31,31 @@ const NewsScene: React.FC = () => {
                 color: 'white',
                 fontFamily: 'Helvetica, Arial, sans-serif'
             }}>
-                <h1 style={{ fontSize: 28, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
-                    {text ? text.substring(0, 150) + (text.length > 150 ? '...' : '') : 'News Update'}
+                <h1 style={{ fontSize: 20, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
+                    {text || 'News Update'}
                 </h1>
             </div>
 
             {/* Right Side: Screenshot */}
             <div style={{ flex: 1, position: 'relative' }}>
                 {/* @ts-ignore */}
-                <Img src={screenshotPath} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <Img src={staticFile(screenshotPath)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
 
             {/* @ts-ignore */}
-            {audioPath && <Audio src={audioPath} />}
+            {audioPath && <Audio src={staticFile(audioPath)} />}
         </AbsoluteFill>
     );
 };
+
+import { getAudioDurationInSeconds } from "@remotion/media-utils";
 
 export const MyComposition = () => {
     return (
         <Composition
             id="NewsVideo"
             component={NewsScene}
-            durationInFrames={5 * 30} // 5 Seconds * 30fps
+            durationInFrames={150} // Fallback
             fps={30}
             width={1280}
             height={720}
@@ -60,6 +63,21 @@ export const MyComposition = () => {
                 screenshotPath: 'https://via.placeholder.com/1280x720',
                 audioPath: '',
                 text: 'Loading News...'
+            }}
+            calculateMetadata={async ({ props }) => {
+                const { audioPath } = props as { audioPath: string };
+                if (!audioPath) {
+                    return { durationInFrames: 150 };
+                }
+                const audioUrl = staticFile(audioPath);
+                try {
+                    const durationInSeconds = await getAudioDurationInSeconds(audioUrl);
+                    // Add 1 second buffer (30 frames)
+                    return { durationInFrames: Math.ceil(durationInSeconds * 30) + 30 };
+                } catch (e) {
+                    console.error("Failed to get audio duration", e);
+                    return { durationInFrames: 150 };
+                }
             }}
         />
     );

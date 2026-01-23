@@ -9,6 +9,7 @@ type SceneProp = {
     image: string; // This can be an image or a video filename in public/
     audio: string;
     duration: number; // in seconds
+    title?: string; // Passed from parent
 }
 
 type NewsVideoProps = {
@@ -18,7 +19,7 @@ type NewsVideoProps = {
     backgroundVideo?: string;
 }
 
-const NewsScene: React.FC<SceneProp> = ({ text, image, audio }) => {
+const NewsScene: React.FC<SceneProp> = ({ text, image, audio, title }) => {
     // Determine if asset is video or image based on extension
     const isVideo = image && (image.endsWith('.mp4') || image.endsWith('.mov') || image.endsWith('.webm'));
 
@@ -41,6 +42,20 @@ const NewsScene: React.FC<SceneProp> = ({ text, image, audio }) => {
                         )
                     )}
                 </div>
+
+                {/* Headline Bar (Below Floating Frame) */}
+                {title && (
+                    <div className="headline-container">
+                        {/* Layer 1: Channel Brand */}
+                        <div className="headline-brand">全球每日快报</div>
+
+                        {/* Layer 2: Content */}
+                        <div className="headline-content">
+                            <div className="headline-live">LIVE</div>
+                            <div className="headline-title">{title}</div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Text Layer (Subtitle) - Frosted Glass Bar */}
@@ -79,6 +94,7 @@ const NewsSequence: React.FC<NewsVideoProps> = (props) => {
     let currentFrame = 0;
 
     const bgVideo = props.backgroundVideo || inputProps.backgroundVideo;
+    const videoTitle = props.title || inputProps.title || "NEWS UPDATE";
 
     return (
         <AbsoluteFill>
@@ -110,7 +126,7 @@ const NewsSequence: React.FC<NewsVideoProps> = (props) => {
 
                     return (
                         <Sequence key={scene.id} from={from} durationInFrames={durationInFrames}>
-                            <NewsScene {...scene} />
+                            <NewsScene {...scene} title={videoTitle} />
                         </Sequence>
                     );
                 })}

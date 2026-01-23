@@ -7,24 +7,32 @@ from src.state import AgentState
 
 async def asset_scraper_node(state: AgentState):
     """
-    Scrapes all images from the news URL and saves them to 'output/assets_raw'.
-    This helper allows the human editor to pick assets easily.
+    Screenshots paragraph elements from the news URL better matching the storyboard scenes
+    and saves them directly to 'output/assets_final'.
     """
-    print("Asset Scraper: Starting raw image collection...")
+    print("Asset Scraper: Starting paragraph screenshotting...")
     url = state.get("news_url")
-    if not url:
-        print("Asset Scraper: No URL found.")
+    storyboard = state.get("storyboard")
+    
+    if not url or not storyboard:
+        print("Asset Scraper: Missing URL or Storyboard.")
         return {}
     
-    output_dir = "output/assets_raw"
+    # Switch to assets_final directly
+    output_dir = "output/assets_final"
     os.makedirs(output_dir, exist_ok=True)
     
-    downloaded_paths = []
+    updated_scenes = []
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
+        # Use dimensions matching the Floating Frame Container (calculated from Composition 1280x720)
+        # 1280 * 100% * 90% = 1152 width
+        # 720 * 90% * 90% = 583 height
         context = await browser.new_context(
-             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            viewport={"width": 1152, "height": 480},
+            device_scale_factor=2,
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
         page = await context.new_page()
         
@@ -32,49 +40,107 @@ async def asset_scraper_node(state: AgentState):
             print(f"Asset Scraper: Visiting {url}...")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
             
-            # Find all image elements
-            # We filter for reasonable size to avoid icons
-            images = await page.evaluate('''() => {
-                return Array.from(document.images)
-                    .filter(img => img.naturalWidth > 200 && img.naturalHeight > 200)
-                    .map(img => img.src);
-            }''')
+            # 1. Force remove common overlays/modals using JS
+            await page.evaluate("""() => {
+                const selectors = ['#onetrust-banner-sdk', '.cookie-banner', '.modal', '[id*="cookie"]', '[class*="popup"]'];
+                selectors.forEach(s => {
+                    const els = document.querySelectorAll(s);
+                    els.forEach(e => e.remove());
+                });
+            }""")
             
-            print(f"Asset Scraper: Found {len(images)} candidate images.")
+            # 2. Inject CSS to style paragraphs for readability
+            # defined .highlight-target for the active paragraph
+            await page.add_style_tag(content="""
+                body { background: #f0f0f0 !important; }
+                p { 
+                    font-family: 'Georgia', serif !important; 
+                    font-size: 24px !important; 
+                    line-height: 1.8 !important;
+                    color: #333 !important; /* Default context color */
+                    background: transparent !important;
+                    padding: 10px 0 !important;
+                    margin: 20px auto !important;
+                    max-width: 800px !important;
+                    display: block !important;
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+                .highlight-target {
+                    color: #d00 !important; /* Red highlight */
+                    font-weight: bold !important;
+                    background: #fff !important;
+                    padding: 20px !important;
+                    border-radius: 8px !important;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+                }
+            """)
             
-            # Download images
-            for i, img_url in enumerate(images):
+            # Find candidate paragraphs
+            paragraphs = await page.locator('p').all()
+            candidates = []
+            for p_loc in paragraphs:
                 try:
-                    # Handle base64 or relative
-                    if img_url.startswith("data:image"):
-                        # Skip base64 for now or handle simple ones
-                        continue
+                    if await p_loc.is_visible():
+                        txt = await p_loc.text_content()
+                        if txt and len(txt.strip()) > 60:
+                            candidates.append(p_loc)
+                except:
+                    continue
+            
+            print(f"Asset Scraper: Found {len(candidates)} visible candidate paragraphs.")
+            
+            # Map Scenes to Paragraphs
+            for i, scene in enumerate(storyboard.scenes):
+                if candidates:
+                    target_p = candidates[i % len(candidates)]
+                    
+                    filename = f"scene_{scene.id}.png"
+                    filepath = os.path.abspath(os.path.join(output_dir, filename))
+                    
+                    try:
+                        # 1. Highlight target
+                        await target_p.evaluate("el => el.classList.add('highlight-target')")
                         
-                    ext = mimetypes.guess_extension(requests.head(img_url, timeout=5).headers.get('content-type', '')) or ".jpg"
-                    if ext == ".jpe": ext = ".jpg"
-                    
-                    filename = f"raw_{i}_{uuid.uuid4().hex[:4]}{ext}"
-                    filepath = os.path.join(output_dir, filename)
-                    
-                    # Download
-                    content = requests.get(img_url, timeout=10).content
-                    with open(filepath, "wb") as f:
-                        f.write(content)
+                        # 2. Scroll to center
+                        # Calculate position to center the element
+                        box = await target_p.bounding_box()
+                        if box:
+                            viewport = page.viewport_size
+                            target_y = box['y'] + box['height'] / 2
+                            scroll_y = target_y - (viewport['height'] / 2)
+                            await page.evaluate(f"window.scrollTo(0, {scroll_y})")
                         
-                    downloaded_paths.append(filepath)
-                    print(f"Asset Scraper: Downloaded {filepath}")
-                    
-                    if len(downloaded_paths) >= 20: # Limit to 20
-                        break
-                except Exception as e:
-                    print(f"Asset Scraper Warning: Failed to download {img_url}: {e}")
-                    
+                        # Add a delay for scroll and render
+                        await page.wait_for_timeout(300) 
+                        
+                        # 3. Capture Viewport Screenshot (Fixed Size)
+                        await page.screenshot(path=filepath)
+                        scene.final_asset_path = filepath
+                        print(f"Asset Scraper: Saved {filename} for Scene {scene.id}")
+                        
+                        # 4. Remove highlight for next iteration
+                        await target_p.evaluate("el => el.classList.remove('highlight-target')")
+                        
+                    except Exception as e:
+                        print(f"Asset Scraper: Failed to screenshot for Scene {scene.id}: {e}")
+                else:
+                    print(f"Asset Scraper: No candidates for Scene {scene.id}")
+                
+                updated_scenes.append(scene)
+
         except Exception as e:
              print(f"Asset Scraper Error: {e}")
         finally:
              await browser.close()
              
-    print(f"Asset Scraper: Finished. {len(downloaded_paths)} images saved to {output_dir}")
-    # We don't necessarily need to put this in state, but we can verify it exists.
-    # The user instruction says Human Loop follows this.
-    return {}
+    # Cleanup raw folder if requested
+    raw_dir = "output/assets_raw"
+    if os.path.exists(raw_dir):
+        import shutil
+        shutil.rmtree(raw_dir)
+        print("Asset Scraper: Removed output/assets_raw")
+
+    return {"storyboard": storyboard}

@@ -42,6 +42,8 @@ async def reporter_node(state: dict):
 
     output_dir = "output/audio"
     os.makedirs(output_dir, exist_ok=True)
+    
+    video_idx = state.get("current_video_index", 1)
 
     updated_scenes = []
 
@@ -77,8 +79,9 @@ async def reporter_node(state: dict):
             resp_data = resp.json()
             if "data" in resp_data:
                 audio_data = base64.b64decode(resp_data["data"])
-                file_id = os.urandom(4).hex()
-                audio_path = f"{output_dir}/scene_{scene.id}_{file_id}.mp3"
+                
+                # Unique filename: scene_{video_idx}_{scene_id}.mp3
+                audio_path = f"{output_dir}/scene_{video_idx}_{scene.id}.mp3"
                 
                 with open(audio_path, "wb") as f:
                     f.write(audio_data)

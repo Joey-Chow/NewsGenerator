@@ -77,10 +77,10 @@ def editor_node(state: dict):
     Output: A JSON object matching the following structure:
     {
       "scenes": [
-        {
           "id": 1,
           "subtitle_text": "First sentence of the script...", 
-          "visual_instruction": "Instruction for the human editor (e.g. 'Slice the inflation chart from the original article' or 'Find a photo of Powell')."
+          "visual_instruction": "Instruction for the human editor...",
+          "image_search_query": "English search query for Google Images"
         },
         ...
       ],
@@ -97,10 +97,12 @@ def editor_node(state: dict):
        - Each scene is one spoken sentence. 
        - NO trailing punctuation (strip '。').
     
-    2. **Visuals (visual_instruction)**:
-       - Language: Chinese (Preferred) or English.
-       - Actionable instructions for a human editor. 
-       - Examples: "截取文章中的股价走势图", "寻找一张相关的各种外币的图片".
+    2. **Visuals**:
+       - **visual_instruction**: Instructions for human editor (Chinese/English).
+       - **image_search_query**: SPECIFIC English search query for Google Images.
+         - Concrete subjects (e.g. "Stock market crash chart", "Joe Biden podium").
+         - Avoid abstract concepts.
+         - Ensure it is a valid search term.
        
     3. **General**:
        - Return ONLY valid JSON.
@@ -141,8 +143,8 @@ def editor_node(state: dict):
 
     # Save
     os.makedirs("output/storyboard", exist_ok=True)
-    file_id = os.urandom(4).hex()
-    storyboard_path = f"output/storyboard/storyboard_{file_id}.json"
+    video_idx = state.get("current_video_index", 1)
+    storyboard_path = f"output/storyboard/storyboard_{video_idx}.json"
     
     with open(storyboard_path, "w", encoding='utf-8') as f:
         f.write(storyboard.model_dump_json(indent=2))

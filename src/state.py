@@ -7,6 +7,9 @@ class Scene(BaseModel):
     subtitle_text: str = Field(..., description="Spoken text (中文台词)")
     visual_instruction: str = Field(..., description="Visual instructions for the human editor (e.g. 'Capture chart from original page').")
     
+    # New image search field
+    image_search_query: Optional[str] = Field(None, description="English search query for Google Images (e.g. 'Elon Musk speaking at conference').")
+
     # Filled later
     final_asset_path: Optional[str] = None # The actual file path used (image/video)
     audio_path: Optional[str] = None
@@ -26,6 +29,17 @@ class AgentState(TypedDict):
     headlines: Optional[List[str]]
     storyboard: Optional[Storyboard] 
     
+    # --- Batch Processing ("GlobalState") ---
+    news_urls: Optional[List[str]] # Queue of URLs to process
+    current_video_index: Optional[int] # To track which video we are on (1, 2, 3...)
+    
+    # Store approved storyboards here until batch render time
+    ready_to_render_storyboards: Annotated[List[Storyboard], operator.add] 
+    
+    generated_segments: Annotated[List[str], operator.add] # Accumulate paths
+    final_video_path: Optional[str]
+    # ----------------------------------------
+
     # Intermediate outputs for parallel execution
     # images_map not needed if we use asset_scraper -> human ingest flow which updates storyboard directly?
     # BUT reporter uses audios_map to avoid parallel overwrite issues with storyboard object.

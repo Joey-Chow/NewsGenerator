@@ -57,7 +57,43 @@ async def batch_video_renderer_node(state: dict):
     
         # Sort scenes by ID just in case
         storyboard.scenes.sort(key=lambda s: s.id)
+
+        # Copy logo
+        logo_source = os.path.join(os.getcwd(), "assets", "logo2.png")
+        if os.path.exists(logo_source):
+             dest_logo = os.path.join(public_dir, "logo2.png")
+             shutil.copy(logo_source, dest_logo)
+             created_files.append(dest_logo)
+        else:
+             print("Batch Renderer Warning: assets/logo2.png not found.")
+
+        # Copy swoosh sound effect
+        swoosh_source = os.path.join(os.getcwd(), "assets", "swoosh.MP3")
+        if os.path.exists(swoosh_source):
+             dest_swoosh = os.path.join(public_dir, "swoosh.mp3")
+             shutil.copy(swoosh_source, dest_swoosh)
+             created_files.append(dest_swoosh)
+        else:
+             print("Batch Renderer Warning: assets/swoosh.MP3 not found.")
         
+        # ------------------------------------------------------------------
+        # Snapshot Logic (Persistent per Storyboard/Video)
+        # ------------------------------------------------------------------
+        snapshot_public_name = ""
+        # Assume snapshot naming matches video index (1-based)
+        # Try both `snapshot_1.png` and maybe `snapshot_idx.png` variants if needed
+        snapshot_source = os.path.join("output", "snapshot", f"snapshot_{idx+1}.png")
+        
+        if os.path.exists(snapshot_source):
+             print(f"Batch Renderer ({idx+1}): Found persistent snapshot {snapshot_source}")
+             snapshot_filename = f"snapshot_{idx+1}.png"
+             dest_snapshot = os.path.join(public_dir, snapshot_filename)
+             shutil.copy(snapshot_source, dest_snapshot)
+             snapshot_public_name = snapshot_filename
+             created_files.append(dest_snapshot)
+        else:
+             print(f"Batch Renderer ({idx+1}): No persistent snapshot found (checked {snapshot_source}).")
+
         for scene in storyboard.scenes:
             # Process Visual Asset (Image or Video)
             img_public_name = ""
@@ -84,12 +120,15 @@ async def batch_video_renderer_node(state: dict):
             else:
                 print(f"Batch Renderer Warning: Missing audio for Scene {scene.id}")
     
+            # NOTE: Per-scene snapshot check removed in favor of persistent storyboard snapshot above.
+
             render_scenes.append({
                 "id": scene.id,
                 "text": scene.subtitle_text,
                 "image": img_public_name, # Can be video or image
                 "audio": audio_public_name,
-                "duration": scene.duration
+                "duration": scene.duration,
+                "snapshot": snapshot_public_name # Pass persistent snapshot to every scene
             })
     
         props = {

@@ -1,4 +1,4 @@
-import { AbsoluteFill, Composition, Sequence, Img, Audio, Video, staticFile, useVideoConfig, getInputProps, OffthreadVideo } from 'remotion';
+import { AbsoluteFill, Composition, Sequence, Img, Audio, Video, staticFile, useVideoConfig, getInputProps, OffthreadVideo, useCurrentFrame, interpolate, Easing } from 'remotion';
 import React from 'react';
 import './style.css';
 
@@ -10,6 +10,9 @@ type SceneProp = {
     audio: string;
     duration: number; // in seconds
     title?: string; // Passed from parent
+    isFirst?: boolean;
+    isLast?: boolean;
+    snapshot?: string; // Optional snapshot image filename
 }
 
 type NewsVideoProps = {
@@ -19,39 +22,86 @@ type NewsVideoProps = {
     backgroundVideo?: string;
 }
 
-const NewsScene: React.FC<SceneProp> = ({ text, image, audio, title }) => {
+const NewsScene: React.FC<SceneProp> = ({ text, image, audio, title, isFirst, isLast, duration, snapshot }) => {
     // Determine if asset is video or image based on extension
     const isVideo = image && (image.endsWith('.mp4') || image.endsWith('.mov') || image.endsWith('.webm'));
 
+    const frame = useCurrentFrame();
+    const { width, fps } = useVideoConfig();
+
+    // Animation Logic
+    const durationInFrames = Math.ceil((duration || 5) * fps);
+
+    let translateX = 0;
+
+    if (isFirst) {
+        // Slide In from Right
+        translateX = interpolate(frame, [0, 25], [width, 0], {
+            extrapolateRight: "clamp",
+            easing: Easing.out(Easing.exp),
+        });
+    } else if (isLast) {
+        // Slide Out to Left
+        translateX = interpolate(frame, [durationInFrames - 25, durationInFrames], [0, -width], {
+            extrapolateLeft: "clamp",
+            easing: Easing.in(Easing.exp),
+        });
+    }
+
     return (
         <AbsoluteFill className="bg-transparent">
-            {/* Visual Layer (Image or Video) - Floating Frame */}
+            {/* Visual Layer - Wrapper for Layout */}
             <div className="visual-layer-wrapper">
-                {/* Floating Frame Container */}
-                <div className="floating-frame">
-                    {/* Inset Stroke Overlay */}
-                    <div className="inset-overlay" />
 
-                    {image && (
-                        isVideo ? (
-                            // @ts-ignore
-                            <Video src={staticFile(image)} className="visual-asset" />
-                        ) : (
-                            // @ts-ignore
-                            <Img src={staticFile(image)} className="visual-asset" />
-                        )
+                {/* 
+                   Content Container:
+                   - Applies Entrance/Exit Animation to the WHOLE group
+                   - Handles Flex Layout (Snapshot | Floating Frame)
+                */}
+                <div
+                    className={`content-layout-container ${snapshot ? 'has-snapshot' : ''}`}
+                    style={{
+                        transform: `translateX(${translateX}px)`,
+                    }}
+                >
+                    {/* Snapshot Area (Optional - 30%) */}
+                    {snapshot && (
+                        <div className="snapshot-frame">
+                            {/* <div className="inset-overlay" /> */}
+                            {/* @ts-ignore */}
+                            <Img src={staticFile(snapshot)} className="visual-asset" />
+                        </div>
                     )}
+
+                    {/* Main Visual Asset (Floating Frame - 70% or 100% of container) */}
+                    <div className="floating-frame">
+                        {/* Inset Stroke Overlay */}
+                        {/* <div className="inset-overlay" /> */}
+
+                        {image && (
+                            isVideo ? (
+                                // @ts-ignore
+                                <Video src={staticFile(image)} className="visual-asset" />
+                            ) : (
+                                // @ts-ignore
+                                <Img src={staticFile(image)} className="visual-asset" />
+                            )
+                        )}
+                    </div>
                 </div>
 
                 {/* Headline Bar (Below Floating Frame) */}
                 {title && (
                     <div className="headline-container">
                         {/* Layer 1: Channel Brand */}
-                        <div className="headline-brand">全球每日快报</div>
+                        <div className="headline-brand">全球每日快讯</div>
 
                         {/* Layer 2: Content */}
                         <div className="headline-content">
-                            <div className="headline-live">LIVE</div>
+                            <div className="headline-live">
+                                {/* @ts-ignore */}
+                                <Img src={staticFile("logo2.png")} className="headline-logo-img" />
+                            </div>
                             <div className="headline-title">{title}</div>
                         </div>
                     </div>
@@ -68,6 +118,12 @@ const NewsScene: React.FC<SceneProp> = ({ text, image, audio, title }) => {
             {/* Audio Layer */}
             {/* @ts-ignore */}
             {audio && <Audio src={staticFile(audio)} />}
+
+            {/* Sound Effect for Entrance */}
+            {isFirst && (
+                // @ts-ignore
+                <Audio src={staticFile("swoosh.mp3")} startFrom={0} volume={0.5} />
+            )}
         </AbsoluteFill>
     );
 };
@@ -117,7 +173,7 @@ const NewsSequence: React.FC<NewsVideoProps> = (props) => {
 
             {/* Content Layer */}
             <AbsoluteFill style={{ zIndex: 1 }}>
-                {scenes.map((scene) => {
+                {scenes.map((scene, index) => {
                     // Ensure duration is valid
                     const safeDuration = scene.duration > 0 ? scene.duration : 5;
                     const durationInFrames = Math.ceil(safeDuration * fps);
@@ -126,7 +182,12 @@ const NewsSequence: React.FC<NewsVideoProps> = (props) => {
 
                     return (
                         <Sequence key={scene.id} from={from} durationInFrames={durationInFrames}>
-                            <NewsScene {...scene} title={videoTitle} />
+                            <NewsScene
+                                {...scene}
+                                title={videoTitle}
+                                isFirst={index === 0}
+                                isLast={index === scenes.length - 1}
+                            />
                         </Sequence>
                     );
                 })}

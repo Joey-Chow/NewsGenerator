@@ -70,6 +70,12 @@ def editor_node(state: dict):
     import re
 
     prompt = """
+    你是一个专业的新闻播报员。
+    当前时间是 2026 年 (请注意：不要使用你训练数据中的旧时间)。
+    关键事实修正：
+    - 唐纳德·特朗普 (Donald Trump) 是现任美国总统，不是前总统
+    - 报道风格必须严谨、客观。
+    
     You are a professional News Editor and Director. 
     Your task is to transform the provided news article into a video storyboard (JSON format).
 
@@ -77,6 +83,7 @@ def editor_node(state: dict):
     Output: A JSON object matching the following structure:
     {
       "scenes": [
+        {
           "id": 1,
           "subtitle_text": "First sentence of the script...", 
           "visual_instruction": "Instruction for the human editor...",

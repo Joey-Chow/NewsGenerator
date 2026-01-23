@@ -21,7 +21,6 @@ body {
     position: relative;
     border-radius: 15px;
     overflow: hidden;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
     margin-bottom: 20px;
 }
 
@@ -40,7 +39,7 @@ body {
 .visual-asset {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .subtitle-bar {
@@ -62,7 +61,7 @@ body {
 
 .subtitle-text {
     color: white;
-    font-size: 20px;
+    font-size: 23px;
     line-height: 1.2;
     text-align: center;
     margin: 0;
@@ -76,6 +75,8 @@ body {
     align-items: flex-start;
     width: 90%;
     max-width: 1000px;
+    margin-top: 20px;
+    /* Added spacing */
 }
 
 .headline-brand {
@@ -100,32 +101,62 @@ body {
     background-color: #a61b1b;
     color: white;
     font-weight: bold;
-    padding: 8px 15px;
-    font-size: 22px;
-    /* Slightly smaller than title but distinct */
+    padding: 6px 12px;
     display: flex;
     align-items: center;
     border-bottom-left-radius: 6px;
+    height: 60px;
+    box-sizing: border-box;
 
     /* Subtle separator line */
     border-right: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+.headline-logo-img {
+    height: 45px;
+    /* Increased size significantly */
+    width: auto;
+    object-fit: contain;
+}
+
 .headline-title {
     background-color: #f0f0f0;
-    /* Grey background */
     color: black;
-    /* Black text */
     font-weight: bold;
-    /* Bold */
     padding: 8px 20px;
     font-size: 32px;
-    /* Significantly larger */
+    height: 60px;
+    display: flex;
+    align-items: center;
     border-bottom-right-radius: 6px;
     border-top-right-radius: 6px;
-    /* If extending past brand */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     border-bottom: 4px solid #a61b1b;
+    box-sizing: border-box;
+}
+
+/* Layout Containers */
+.content-layout-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    width: 90%;
+    gap: 20px;
+}
+
+.content-layout-container.has-snapshot .floating-frame {
+    width: 70%;
+    margin: 0;
+}
+
+.snapshot-frame {
+    width: 30%;
+    height: 480px;
+    position: relative;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
 }

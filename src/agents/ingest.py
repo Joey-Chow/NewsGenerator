@@ -1,10 +1,9 @@
 import os
 import glob
 import subprocess
-from src.state import AgentState, Storyboard
+from src.state import AgentState
 
 def get_media_duration(file_path):
-    # Try using ffprobe to get duration for video/audio
     try:
         cmd = [
             "ffprobe", 
@@ -18,61 +17,114 @@ def get_media_duration(file_path):
     except:
         return 0.0
 
-def human_asset_ingest_node(state: AgentState):
+import json
+from src.state import Storyboard
+
+def batch_human_script_review_node(state: AgentState):
     """
-    Scans 'output/assets_final' for files matching 'scene_{id}.*' convention.
-    Updates the storyboard with final_asset_path.
+    Breakpoint Node.
+    Allows user to manually edit the storyboard JSON files in 'output/storyboard/'.
+    Reloads them back into state before proceeding to Asset Scraper.
     """
-    print("Human Ingest: Scanning for user-provided assets...")
-    storyboard = state.get("storyboard")
-    if not storyboard:
-        print("Human Ingest: No storyboard found.")
-        return {}
+    print("Batch Script Review: Reloading storyboards from disk...")
+    
+    drafts = state.get("draft_storyboards", [])
+    if not drafts:
+        print("Batch Script Review: No drafts in state. Checking disk anyway...")
+        
+    storyboard_dir = "output/storyboard"
+    if not os.path.exists(storyboard_dir):
+        print("Batch Script Review: output/storyboard directory missing.")
+        return {"draft_storyboards": []}
+        
+    reloaded_storyboards = []
+    
+    # We rely on the order or filename indices. 
+    # Let's try to match existing drafts or just reload all found json files.
+    # Reloading ALL found is safer if user added/removed some.
+    
+    json_files = glob.glob(os.path.join(storyboard_dir, "storyboard_*.json"))
+    # Sort by number in filename to maintain order
+    # scene_X.json -> extract X
+    def extract_id(f):
+        try:
+            return int(os.path.splitext(os.path.basename(f))[0].split('_')[1])
+        except:
+            return 999
+            
+    json_files.sort(key=extract_id)
+    
+    for fpath in json_files:
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                sb = Storyboard(**data)
+                reloaded_storyboards.append(sb)
+                print(f"  - Reloaded {os.path.basename(fpath)}: {sb.title}")
+        except Exception as e:
+            print(f"  - Error reloading {fpath}: {e}")
+            
+    print(f"Batch Script Review: {len(reloaded_storyboards)} storyboards loaded.")
+    return {"draft_storyboards": reloaded_storyboards}
+
+def batch_human_asset_ingest_node(state: AgentState):
+    """
+    Breakpoint node. 
+    1. Scans 'output/assets_final' for files matching 'scene_{vid}_{sid}.*'
+    2. Updates ALL 'draft_storyboards' with final_asset_path.
+    3. Promotes them to 'ready_to_render_storyboards'.
+    """
+    print("Batch Human Ingest: Scanning for verified assets...")
+    
+    drafts = state.get("draft_storyboards", [])
+    if not drafts:
+        print("Batch Human Ingest: No draft storyboards found.")
+        return {"ready_to_render_storyboards": []}
         
     assets_dir = "output/assets_final"
     os.makedirs(assets_dir, exist_ok=True)
     
-    # 1. Show instructions if empty (though this runs after interrupt, so user should have done it)
-    files = os.listdir(assets_dir)
-    print(f"Human Ingest: Found {len(files)} files in {assets_dir}.")
+    # Optional: Logic to find matching snapshot per video?
+    # Snapshots are handled by reporter or renderer traditionally, but let's assume they exist.
     
-    updated_scenes = []
+    finalized_storyboards = []
     
-    for scene in storyboard.scenes:
-        # Check for matching file
-        # Rules: scene_{id}.jpg, scene_{id}.png, scene_{id}.mp4, scene_0{id}.jpg etc.
-        # Let's simple-match 'scene_{id}.' or 'scene_{pad_id}.'
+    for video_idx_0, storyboard in enumerate(drafts):
+        video_id = video_idx_0 + 1
+        print(f"  - Ingesting Video {video_id} ('{storyboard.title}')...")
         
-        candidates = []
-        pattern = f"scene_{scene.id}.*"
-        candidates.extend(glob.glob(os.path.join(assets_dir, pattern)))
-        # Try padded 01
-        pattern_padded = f"scene_{scene.id:02d}.*"
-        candidates.extend(glob.glob(os.path.join(assets_dir, pattern_padded)))
-        
-        # Unique
-        candidates = list(set(candidates))
-        
-        if candidates:
-            # Pick first
-            asset_path = candidates[0]
-            print(f"Human Ingest: Matched Scene {scene.id} to {asset_path}")
-            scene.final_asset_path = asset_path
-            # scene.image_path removed from model
+        updated_scenes = []
+        for scene in storyboard.scenes:
+            # Pattern: scene_{vid}_{sid}.*
+            # e.g. scene_1_1.jpg
             
-            # Check if video
-            if asset_path.lower().endswith(('.mp4', '.mov', '.webm')):
-                dur = get_media_duration(asset_path)
-                if dur > 0:
-                    scene.duration = dur 
+            candidates = []
+            pattern = f"scene_{video_id}_{scene.id}.*"
+            candidates.extend(glob.glob(os.path.join(assets_dir, pattern)))
             
-        else:
-             print(f"Human Ingest: No user asset found for Scene {scene.id}.")
-             # Fallback logic removed as image_path is gone from model
-             # Use placeholder if explicit fallback needed in renderer, 
-             # or we can check logic later. For now, leave empty.
+            # Legacy/Fallback pattern if needed? (scene_{sid}.*) -> Avoid to prevent collision
+            
+            if candidates:
+                asset_path = candidates[0] # Pick first match
+                scene.final_asset_path = os.path.abspath(asset_path)
+                print(f"    -> Matched Scene {scene.id} to {os.path.basename(asset_path)}")
+                
+                # Update duration if video
+                if asset_path.lower().endswith(('.mp4', '.mov', '.webm')):
+                    d = get_media_duration(asset_path)
+                    if d > 0:
+                        scene.duration = d
+            else:
+                print(f"    -> WARNING: No asset found for Scene {scene.id} (Expected {pattern})")
+                
+            updated_scenes.append(scene)
         
-        updated_scenes.append(scene)
+        storyboard.scenes = updated_scenes
+        storyboard.is_approved = True # Auto-approve after this step? Or user manual check implied.
+        finalized_storyboards.append(storyboard)
         
-    storyboard.scenes = updated_scenes
-    return {"storyboard": storyboard}
+    print(f"Batch Human Ingest: Ready to render {len(finalized_storyboards)} videos.")
+    return {
+        "ready_to_render_storyboards": finalized_storyboards,
+        # Clear drafts to save space? Optional.
+    }

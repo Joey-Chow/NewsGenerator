@@ -3,101 +3,98 @@ import requests
 import mimetypes
 from src.state import AgentState
 
-async def asset_scraper_node(state: AgentState):
+# --- Batch Asset Scraper ---
+def batch_asset_scraper_node(state: AgentState):
     """
-    Fetches images using Google Custom Search JSON API based on 'image_search_query'.
-    Saves results to 'output/assets_final'.
+    Iterates through 'draft_storyboards' and fetches images for ALL scenes.
+    Output: draft_storyboards (Updated with asset paths)
     """
-    print("Asset Scraper: Starting Google Image Search...")
+    storyboards = state.get("draft_storyboards", [])
+    print(f"Batch Asset Scraper: Processing {len(storyboards)} storyboards...")
     
-    storyboard = state.get("storyboard")
-    if not storyboard:
-        print("Asset Scraper: Missing storyboard.")
-        return {}
-
     # 1. Get API Key
     api_key = os.environ.get("SERPAPI_API_KEY")
-    
     if not api_key:
-        print("Asset Scraper Error: Missing SERPAPI_API_KEY in environment variables.")
-        return {}
+        print("Batch Asset Scraper Error: Missing SERPAPI_API_KEY.")
+        return {"draft_storyboards": storyboards} # Return unmodified
 
     output_dir = "output/assets_final"
     os.makedirs(output_dir, exist_ok=True)
     
-    updated_scenes = []
+    updated_storyboards = []
     
-    video_idx = state.get("current_video_index", 1) # Default to 1 if missing
-    
-    for scene in storyboard.scenes:
-        query = scene.image_search_query or scene.visual_instruction or "news"
-        print(f"Asset Scraper: Searching SerpApi for Scene {scene.id}: '{query}'...")
+    for video_idx_0, storyboard in enumerate(storyboards):
+        video_id = video_idx_0 + 1
+        print(f"  - Scraper: Processing Storyboard {video_id} ('{storyboard.title}')...")
         
-        try:
-            # 2. Call SerpApi (Google Images Engine)
-            params = {
-                "engine": "google_images",
-                "q": query,
-                "api_key": api_key,
-                "num": 3,  # Fetch up to 3 results for fallback
-                "tbs": "itp:photo" # Photos only (Filters out clips/charts), Medium/Large allowed
-            }
+        updated_scenes = []
+        for scene in storyboard.scenes:
+            query = scene.image_search_query or "news"
             
-            resp = requests.get("https://serpapi.com/search", params=params, timeout=15)
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                results = data.get("images_results", [])
+            # Skip if already has asset (maybe from manual override?)
+            if scene.final_asset_path and os.path.exists(scene.final_asset_path):
+                updated_scenes.append(scene)
+                continue
                 
-                image_found = False
-                for result in results:
-                    image_url = result.get("original") or result.get("thumbnail")
-                    if not image_url:
-                        continue
-                        
-                    print(f"Asset Scraper: Trying image URL: {image_url}")
+            print(f"    - Scene {scene.id}: Search '{query}'...")
+            
+            image_found = False
+            try:
+                # 2. Call SerpApi
+                params = {
+                    "engine": "google_images",
+                    "q": f"{query} -gettyimages -shutterstock -stock -alamy",
+                    "api_key": api_key,
+                    "num": 3,
+                    "tbs": "itp:photo"
+                }
+                
+                resp = requests.get("https://serpapi.com/search", params=params, timeout=15)
+                
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results = data.get("images_results", [])
                     
-                    try:
-                        # 3. Download Image
-                        img_resp = requests.get(image_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                    for result in results:
+                        image_url = result.get("original") or result.get("thumbnail")
+                        if not image_url: continue
                         
-                        if img_resp.status_code == 200:
-                            content_type = img_resp.headers.get("content-type", "").lower()
-                            
-                            # STRICT VALIDATION: Must be an image
-                            if not content_type.startswith("image/"):
-                                print(f"Asset Scraper: Skipped non-image content type: {content_type}")
-                                continue
+                        try:
+                            # 3. Download
+                            img_resp = requests.get(image_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                            if img_resp.status_code == 200:
+                                content_type = img_resp.headers.get("content-type", "").lower()
+                                if not content_type.startswith("image/"): continue
                                 
-                            ext = mimetypes.guess_extension(content_type.split(';')[0]) or ".jpg"
-                            if ext == ".html" or ext == ".htm":
-                                print("Asset Scraper: Skipped HTML file masquerading as image.")
-                                continue
-                            
-                            # Unique filename: scene_{video_idx}_{scene_id}.ext
-                            filename = f"scene_{video_idx}_{scene.id}{ext}"
-                            filepath = os.path.join(output_dir, filename)
-                            
-                            with open(filepath, "wb") as f:
-                                f.write(img_resp.content)
+                                ext = mimetypes.guess_extension(content_type.split(';')[0]) or ".jpg"
+                                if ext in [".html", ".htm"]: continue
                                 
-                            scene.final_asset_path = os.path.abspath(filepath)
-                            print(f"Asset Scraper: Saved {filename}")
-                            image_found = True
-                            break # Success, stop looking for this scene
-                        else:
-                            print(f"Asset Scraper: Download failed ({img_resp.status_code})")
-                    except Exception as download_err:
-                        print(f"Asset Scraper: Download error: {download_err}")
+                                # Unique Filename: scene_{vid}_{sid}.ext
+                                filename = f"scene_{video_id}_{scene.id}{ext}"
+                                filepath = os.path.join(output_dir, filename)
+                                
+                                with open(filepath, "wb") as f:
+                                    f.write(img_resp.content)
+                                    
+                                scene.final_asset_path = os.path.abspath(filepath)
+                                print(f"      -> Saved {filename}")
+                                image_found = True
+                                break 
+                        except:
+                            pass
+                    
+                    if not image_found:
+                        print(f"      -> No valid images found.")
+                else:
+                    print(f"      -> SerpApi Error {resp.status_code}")
+
+            except Exception as e:
+                print(f"      -> Error: {e}")
                 
-                if not image_found:
-                     print(f"Asset Scraper: No valid images found for '{query}' after trying {len(results)} results.")
-            else:
-                print(f"Asset Scraper: SerpApi Error {resp.status_code}: {resp.text}")
+            updated_scenes.append(scene)
+        
+        storyboard.scenes = updated_scenes
+        updated_storyboards.append(storyboard)
 
-        except Exception as e:
-            print(f"Asset Scraper: Error processing Scene {scene.id}: {e}")
-            
-        updated_scenes.append(scene)
-
-    return {"storyboard": storyboard}
+    print("Batch Asset Scraper: Finished.")
+    return {"draft_storyboards": updated_storyboards}

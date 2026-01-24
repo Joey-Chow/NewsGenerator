@@ -1,79 +1,182 @@
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 import os
-
 import requests
 from bs4 import BeautifulSoup
+import json
+import re
+from src.state import AgentState, Storyboard
+from playwright.sync_api import sync_playwright
 
-def scraper_node(state: dict):
+def extract_content_from_html(html_content):
     """
-    Fetches the content from the news_url.
+    Helper function to robustly extract text and headline from HTML.
+    Returns (text, headline) tuple.
     """
-    url = state.get("news_url")
-    print(f"Scraper: Fetching content from {url}...")
+    soup = BeautifulSoup(html_content, 'html.parser')
     
-    try:
-        # Use a standard user-agent
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        # clean up the html
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Basic content extraction heuristics
-        # 1. Try to find the article body
-        article = soup.find('article')
-        if article:
-            text = article.get_text(separator="\n", strip=True)
-        else:
-            # Fallback to all p tags
-            paragraphs = soup.find_all('p')
-            text = "\n".join([p.get_text(strip=True) for p in paragraphs])
+    # 1. Headline Extraction
+    headline = ""
+    h1 = soup.find('h1')
+    if h1:
+        headline = h1.get_text(strip=True)
+    else:
+        title_tag = soup.find('title')
+        if title_tag:
+            headline = title_tag.get_text(strip=True)
+
+    # 2. Content Extraction Heuristics
+    text = ""
+    
+    # Priority A: <article> tag
+    article = soup.find('article')
+    if article:
+        text = article.get_text(separator="\n", strip=True)
+    
+    # Priority B: <main> tag (if article missing or too short)
+    if len(text) < 500:
+        main_tag = soup.find('main')
+        if main_tag:
+            text = main_tag.get_text(separator="\n", strip=True)
             
+    # Priority C: Aggressive <p> tag scraping (filter out short links/menus)
+    if len(text) < 500:
+        paragraphs = soup.find_all('p')
+        # Filter out very short paragraphs (likely menu items/footer) to reduce noise
+        valid_paragraphs = [p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 30]
+        text = "\n".join(valid_paragraphs)
+
+    if not text:
+        text = "Could not extract text. " + headline
+        
+    return text, headline
+
+# --- Batch Scraper Step ---
+def batch_scraper_node(state: AgentState):
+    """
+    Hybrid Scraper:
+    1. Try fast 'requests' fetch.
+    2. Fallback to 'playwright' (headless browser) if failed or content < 500 chars.
+    """
+    urls = state.get("news_urls", [])
+    print(f"Batch Scraper: Processing {len(urls)} URLs...")
+    
+    scraped_data = []
+    
+    # Requests headers
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+    }
+
+    # Browser instance (lazy init if needed)
+    playwright_instance = None
+    browser = None
+    
+    for url in urls:
+        print(f"  - Fetching {url}...")
+        text = ""
         headline = ""
-        h1 = soup.find('h1')
-        if h1:
-            headline = h1.get_text(strip=True)
+        content_found = False
+        
+        # --- Attempt 1: Requests (Fast) ---
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                text, headline = extract_content_from_html(resp.text)
+                if len(text) > 500:
+                    content_found = True
+                    print(f"    -> Success (Requests): {len(text)} chars")
+                else:
+                    print(f"    -> Warning: Requests returned short content ({len(text)} chars). Trying fallback...")
+            else:
+                print(f"    -> Request failed ({resp.status_code}). Trying fallback...")
+        except Exception as e:
+            print(f"    -> Request Error: {e}")
 
-        if not text:
-            text = "Could not extract text. " + headline
+        # --- Attempt 2: Playwright (Robust) ---
+        if not content_found:
+            print("    -> Launching Playwright Fallback...")
+            try:
+                # Initialize browser ONLY if needed
+                if not playwright_instance:
+                    playwright_instance = sync_playwright().start()
+                    # Disable HTTP/2 to prevent protocol errors on some sites
+                    browser = playwright_instance.chromium.launch(headless=True, args=["--disable-http2"])
+                
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                    bypass_csp=True
+                )
+                page = context.new_page()
+                
+                # Navigate with recovery logic
+                try:
+                    page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                except Exception as nav_err:
+                    if "Timeout" in str(nav_err) or "TIMED_OUT" in str(nav_err):
+                        print(f"      -> Warning: Navigation timed out. Scraping partial content...")
+                    else:
+                        print(f"      -> Playwright Navigation Error: {nav_err}")
+                        # Don't re-raise, try to get what we can or fail gracefully
+                
+                # Scroll
+                try:
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                except: pass
+                page.wait_for_timeout(3000)
+                
+                # Parse
+                text, headline = extract_content_from_html(page.content())
+                content_found = True # Even if short, this is our best bet
+                print(f"    -> Success (Playwright): {len(text)} chars")
+                
+                context.close() # Clean up page/context
+                
+            except Exception as e:
+                print(f"    -> Critical Scraper Failure: {e}")
+                text = "Scraping Failed."
+                headline = "Error"
 
-        print(f"Scraper: Content fetched ({len(text)} chars).")
-        return {"raw_text": text, "headlines": [headline] if headline else []}
+        scraped_data.append({
+            "url": url,
+            "raw_text": text,
+            "headline": headline
+        })
 
-    except Exception as e:
-        print(f"Scraper Error: {e}")
-        return {"raw_text": f"Error fetching {url}: {e}"}
+    # Cleanup Playwright
+    if browser:
+        browser.close()
+    if playwright_instance:
+        playwright_instance.stop()
 
-def editor_node(state: dict):
+    print(f"Batch Scraper: Completed. {len(scraped_data)}/{len(urls)} processed.")
+    return {"scraped_articles": scraped_data}
+
+
+# --- Batch Editor Step ---
+def batch_editor_node(state: AgentState):
     """
-    Summarizes the raw text using an LLM into a script.
+    Iterates through 'scraped_articles' and generates storyboards for ALL of them.
+    Output: draft_storyboards (List[Storyboard])
     """
-    raw_text = state.get("raw_text", "")
-    news_url = state.get("news_url", "")
+    articles = state.get("scraped_articles", [])
+    print(f"Batch Editor: Processing {len(articles)} articles...")
     
-    print("Editor: Summarizing/Writing script...")
-    
-    # Check for API Keys
     gemini_key = os.environ.get("GEMINI_API_KEY")
-    
     llm = None
     if gemini_key:
         from langchain_google_genai import ChatGoogleGenerativeAI
-        print("Editor: Using Google Gemini...")
-        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7, google_api_key=gemini_key)
+        # Using a slightly faster/cheaper model for batch validity if desired, but sticking to trusted config
+        llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.7, google_api_key=gemini_key)
+    else:
+        print("Batch Editor Error: No GEMINI_API_KEY found.")
+        return {"draft_storyboards": []}
 
-    import json
-    import re
-
-    prompt = """
+    prompt_template = """
     你是一个专业的新闻播报员。
     当前时间是 2026 年 (请注意：不要使用你训练数据中的旧时间)。
     关键事实修正：
     - 唐纳德·特朗普 (Donald Trump) 是现任美国总统，不是前总统
+    - 卡尼 (Mark Carney) 是现任加拿大总理，不是特鲁多
     - 报道风格必须严谨、客观。
     
     You are a professional News Editor and Director. 
@@ -86,7 +189,6 @@ def editor_node(state: dict):
         {
           "id": 1,
           "subtitle_text": "First sentence of the script...", 
-          "visual_instruction": "Instruction for the human editor...",
           "image_search_query": "English search query for Google Images"
         },
         ...
@@ -105,58 +207,59 @@ def editor_node(state: dict):
        - NO trailing punctuation (strip '。').
     
     2. **Visuals**:
-       - **visual_instruction**: Instructions for human editor (Chinese/English).
        - **image_search_query**: SPECIFIC English search query for Google Images.
-         - **Keywords**: Use terms like "real life photography", "news photo", "press photo".
-         - **Negative Constraints**: AVOID charts, diagrams, vectors, cartoons, generic icons, text slides.
-         - **Subjects**: Concrete subjects (e.g. "Stock market floor traders photo", "Joe Biden podium speech photo").
+         - **Focus**: Identify the core SUBJECT and ACTION in the current sentence.
+         - **Ignore Citations**: IGNORE phrases like "According to [Source]", "Reported by", "As stated by". 
+           - *Example*: If text is "WSJ reports retail sales rose", query should be "people shopping retail mall", NOT "WSJ logo" or "news anchor".
+         - **Strict Constraint**: AVOID "news anchor", "news studio", "broadcasting room", "newsroom", "TV presenter" or "reporter".
+         - **Negative Constraints**: AVOID charts, diagrams, vectors, generic icons, text slides.
+         - **Keywords**: Use terms like "real life photography", "press photo", "high quality photo".
          - Ensure it is a valid search term.
        
     3. **General**:
        - Return ONLY valid JSON.
     """
-    
-    messages = [
-        SystemMessage(content=prompt),
-        HumanMessage(content=f"Source URL: {news_url}\n\nContent:\n{raw_text}")
-    ]
-    
-    print("Editor: Invoking LLM for Storyboard...")
-    from src.state import Storyboard, Scene
 
-    storyboard = None
-    try:
-        if ConfiguredLLM := getattr(llm, "with_structured_output", None):
-             structured_llm = llm.with_structured_output(Storyboard)
-             storyboard = structured_llm.invoke(messages)
-    except Exception as e:
-        print(f"Editor: Structured output failed: {e}")
+    generated_storyboards = []
 
-    if not storyboard:
-        # Manual parsing
-        response = llm.invoke(messages)
-        content = response.content
+    for idx, article in enumerate(articles):
+        url = article["url"]
+        text = article["raw_text"]
+        print(f"  - Editing Article {idx+1}/{len(articles)} (Source: {url[:30]}...)...")
+        
+        messages = [
+            SystemMessage(content=prompt_template),
+            HumanMessage(content=f"Source URL: {url}\n\nContent:\n{text[:15000]}") # Truncate if too huge
+        ]
+        
         try:
+            # Invocation
+            response = llm.invoke(messages)
+            content = response.content
+            
+            # Parsing
             json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match: content = json_match.group(0)
+            if json_match: 
+                content = json_match.group(0)
+            
             data = json.loads(content)
-            # Handle if it's wrapped in 'storyboard' key or direct
             if "scenes" not in data and "storyboard" in data:
                 data = data["storyboard"]
-            storyboard = Storyboard(**data)
-        except Exception as e:
-             print(f"Editor: Manual parsing failed: {e}. Content: {content[:100]}")
-             # Create dummy
-             storyboard = Storyboard(scenes=[], title="Error", background_music_mood="Error")
+                
+            sb = Storyboard(**data)
+            generated_storyboards.append(sb)
+            
+            # Save Debug Copy
+            os.makedirs("output/storyboard", exist_ok=True)
+            # Use index + 1 for filename consistency 1-based
+            with open(f"output/storyboard/storyboard_{idx+1}.json", "w", encoding='utf-8') as f:
+                f.write(sb.model_dump_json(indent=2))
+                
+            print(f"    -> Generated Storyboard: {sb.title}")
 
-    # Save
-    os.makedirs("output/storyboard", exist_ok=True)
-    video_idx = state.get("current_video_index", 1)
-    storyboard_path = f"output/storyboard/storyboard_{video_idx}.json"
-    
-    with open(storyboard_path, "w", encoding='utf-8') as f:
-        f.write(storyboard.model_dump_json(indent=2))
-        
-    print(f"Editor: Storyboard generated ({len(storyboard.scenes)} scenes). Saved to {storyboard_path}")
-    
-    return {"storyboard": storyboard}
+        except Exception as e:
+            print(f"    -> Editor Failed for {url}: {e}")
+            # Don't append invalid content
+
+    print(f"Batch Editor: Finished. {len(generated_storyboards)} drafts ready.")
+    return {"draft_storyboards": generated_storyboards}

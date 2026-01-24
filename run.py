@@ -25,8 +25,11 @@ async def main():
     # 📝 CONFIGURATION: Paste your URLs below (one per line)
     # ---------------------------------------------------------
     URLS_TEXT = """
-    https://www.theglobeandmail.com/business/economy/article-us-economy-gdp-growth-third-quarter-2025/
     https://www.cbc.ca/news/world/board-of-peace-gaza-trump-list-of-countries-9.7055866
+    https://www.theglobeandmail.com/business/economy/article-us-economy-gdp-growth-third-quarter-2025/
+    https://www.kitco.com/news/article/2026-01-22/inflation-remains-sticky-gold-prices-hold-support-above-4800
+    https://finance.yahoo.com/news/dollar-set-worst-week-since-083446295.html?guccounter=1&guce_referrer=aHR0cHM6Ly9uZXdzLmdvb2dsZS5jb20v&guce_referrer_sig=AQAAANQOu1SQNPEYR-6OO4ER0yxZirlM_0HNuTA0qPSbYFZ49Cc9xNy_rBMSqZgFWkaju1zsnxn0r3ITPXNJjE0BSMTZ4H9w3XSB1U0FcQ6cHtoAhlFR5TI8qWvxrz8UCS8T5ikJoorZ6tRO6e9d_qDXmY5xx0sxk5stGr0-47oyqwqz
+    https://www.economist.com/business/2026/01/22/chinese-ai-models-are-popular-but-can-they-make-money
     """
     # ---------------------------------------------------------
     
@@ -45,37 +48,55 @@ async def main():
     
     # 1. Start the graph (will run until interrupt)
     print("running...")
-    await app.ainvoke(inputs, config=config)
     
-    # 2. Loop to handle multiple interrupts (one per video)
+    # Initial run
+    # Use astream to see progress or just ainvoke
+    # We use ainvoke(None, config) for resumes
+    
+    current_input = inputs
+    
     while True:
-        snapshot = app.get_state(config)
-        next_step = snapshot.next
-        
-        if not next_step:
-            # Workflow finished (reached END)
-            break
+        try:
+            # Run until next interrupt or end
+            await app.ainvoke(current_input, config=config)
             
-        if "human_asset_ingest" in next_step:
-            print("\n" + "="*50)
-            print("⏸️  WORKFLOW PAUSED: Human Input Required")
-            print("="*50)
-            print("Scraper and Editor have finished.")
-            print("1. Please check 'output/assets_raw' for downloaded images.")
-            print("2. Select and rename assets to 'output/assets_final/part_{id}.jpg' or 'scene_{id}.mp4' etc.")
-            print("3. When done, press ENTER to resume ingestion and rendering.")
-            input("Press Enter to continue...")
+            # Check state
+            snapshot = app.get_state(config)
+            next_steps = snapshot.next
             
-            print("\n▶️ Resuming workflow...")
-            # Dictionary input of None means resume with current state
-            await app.ainvoke(None, config=config)
-        else:
-            # Stopped at some other point unexpectedly
-            print(f"Workflow paused at unexpected step: {next_step}")
+            if not next_steps:
+                print("\n✅ Workflow Finished!")
+                break
+            
+            # Handle Interrupts
+            if "batch_script_review" in next_steps:
+                print("\n" + "="*60)
+                print("⏸️  INTERRUPT 1: SCRIPT REVIEW")
+                print("="*60)
+                print("1. Please check 'output/storyboard/' for generated JSON files.")
+                print("2. Edit the subtitles or visual instructions if needed.")
+                print("3. Save your changes.")
+                input("\n⌨️  Press ENTER to confirm edits and continue to Asset Scraping...")
+                print("\n▶️ Resuming workflow...")
+                current_input = None # Resume
+                
+            elif "batch_human_ingest" in next_steps:
+                print("\n" + "="*60)
+                print("⏸️  INTERRUPT 2: ASSET REVIEW")
+                print("="*60)
+                print("1. Please check 'output/assets_final/' for downloaded images.")
+                print("2. Replace or delete images as needed (ensure filenames match scene_X_Y).")
+                input("\n⌨️  Press ENTER to confirm assets and continue to Audio/Rendering...")
+                print("\n▶️ Resuming workflow...")
+                current_input = None # Resume
+                
+            else:
+                print(f"Workflow paused at unexpected step: {next_steps}")
+                break
+                
+        except Exception as e:
+            print(f"Error during execution: {e}")
             break
-    
-    print("\n✅ Workflow Finished!")
-    # print(result) # Debug output
 
 if __name__ == "__main__":
     asyncio.run(main())

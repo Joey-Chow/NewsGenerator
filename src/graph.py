@@ -1,100 +1,56 @@
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 from src.state import AgentState
-from src.agents.editor import editor_node, scraper_node
-from src.agents.reporter import reporter_node
-from src.agents.asset_scraper import asset_scraper_node
-from src.agents.ingest import human_asset_ingest_node
+from src.agents.editor import batch_scraper_node, batch_editor_node
+from src.agents.reporter import batch_reporter_node
+from src.agents.asset_scraper import batch_asset_scraper_node
+from src.agents.ingest import batch_human_asset_ingest_node, batch_human_script_review_node
 from src.agents.scheduler import scheduler_node
 from src.agents.concat import concat_node
 from src.agents.batch_renderer import batch_video_renderer_node
-from src.agents.namer import namer_node
-
-def human_review_node(state: AgentState):
-    # This node serves as a breakpoint or review step
-    print("Human Review: Storing approved storyboard for batch rendering...")
-    sb = state.get("storyboard")
-    
-    # FIX: Only return the NEW item. operator.add will append it to the existing list.
-    to_append = [sb] if sb else []
-    
-    return {
-        "is_approved": True, 
-        "ready_to_render_storyboards": to_append
-    }
-
-def should_render(state: AgentState):
-    if state.get("is_approved"):
-        return "scheduler" # Loop back to process next URL
-    return "human_review" 
-
-def route_scheduler(state: AgentState):
-    # If we have a news_url set by the scheduler, we start the loop
-    if state.get("news_url"):
-        return "scraper"
-    # Otherwise we go to batch rendering
-    return "batch_renderer"
+from src.agents.youtuber import youtuber_node
 
 def build_graph():
     workflow = StateGraph(AgentState)
 
-    # Add nodes
+    # Add Nodes
     workflow.add_node("scheduler", scheduler_node)
-    workflow.add_node("concat", concat_node)
-    workflow.add_node("namer", namer_node) # New namer node
-    
-    workflow.add_node("scraper", scraper_node)
-    workflow.add_node("editor", editor_node)
-    workflow.add_node("asset_scraper", asset_scraper_node)
-    workflow.add_node("human_asset_ingest", human_asset_ingest_node)
-    workflow.add_node("reporter", reporter_node)
-    workflow.add_node("human_review", human_review_node)
-    
-    # New Batch Node
+    workflow.add_node("batch_scraper", batch_scraper_node)
+    workflow.add_node("batch_editor", batch_editor_node)
+    workflow.add_node("batch_script_review", batch_human_script_review_node) # New Node
+    workflow.add_node("batch_asset_scraper", batch_asset_scraper_node)
+    workflow.add_node("batch_human_ingest", batch_human_asset_ingest_node)
+    workflow.add_node("batch_reporter", batch_reporter_node)
     workflow.add_node("batch_renderer", batch_video_renderer_node)
+    workflow.add_node("concat", concat_node)
+    workflow.add_node("youtuber", youtuber_node)
 
-    # Add edges
-    # Entry Point -> Scheduler
+    # Set Entry Point
     workflow.set_entry_point("scheduler")
-    
-    # Scheduler Routing
-    workflow.add_conditional_edges(
-        "scheduler",
-        route_scheduler,
-        {
-            "scraper": "scraper",
-            "batch_renderer": "batch_renderer"
-        }
-    )
-    
-    # Subgraph Sequence
-    workflow.add_edge("scraper", "editor")
-    workflow.add_edge("editor", "asset_scraper")
-    workflow.add_edge("asset_scraper", "human_asset_ingest")
-    workflow.add_edge("human_asset_ingest", "reporter")
-    workflow.add_edge("reporter", "human_review")
-    
-    # Review Loop -> Back to Scheduler
-    workflow.add_conditional_edges(
-        "human_review",
-        should_render,
-        {
-            "scheduler": "scheduler",
-            "human_review": "human_review" 
-        }
-    )
-    
-    # Batch Renderer -> Concat
-    workflow.add_edge("batch_renderer", "concat")
-    
-    # Concat -> Namer -> End
-    workflow.add_edge("concat", "namer")
-    workflow.add_edge("namer", END)
 
-    # Compile with interrupt and checkpointer
+    # Define Linear Flow
+    # Scheduler loads list of URLs -> Scraper
+    workflow.add_edge("scheduler", "batch_scraper")
+    workflow.add_edge("batch_scraper", "batch_editor")
+    
+    # Interrupt 1: Script Review (Check output/storyboard/*.json)
+    workflow.add_edge("batch_editor", "batch_script_review")
+    workflow.add_edge("batch_script_review", "batch_asset_scraper")
+    
+    # Interrupt 2: Asset Review (Check output/assets_final/*.jpg)
+    workflow.add_edge("batch_asset_scraper", "batch_human_ingest")
+    
+    workflow.add_edge("batch_human_ingest", "batch_reporter")
+    workflow.add_edge("batch_reporter", "batch_renderer")
+    workflow.add_edge("batch_renderer", "concat")
+    workflow.add_edge("concat", "youtuber")
+    workflow.add_edge("youtuber", END)
+
+    # Checkpointer for interrupt
     checkpointer = MemorySaver()
-    # Interrupt before human_asset_ingest (for manual asset checks)
-    # And potentially before human_review if user wants to check script (optional, but requested flow puts interrupts at ingest)
-    return workflow.compile(checkpointer=checkpointer, interrupt_before=["human_asset_ingest"])
+    
+    # Interrupt before script review AND asset review
+    return workflow.compile(checkpointer=checkpointer, interrupt_before=["batch_script_review", "batch_human_ingest"])
 
 if __name__ == "__main__":
     app = build_graph()

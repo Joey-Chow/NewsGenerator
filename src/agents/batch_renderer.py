@@ -175,5 +175,4 @@ async def batch_video_renderer_node(state: dict):
     return {
         "generated_segments": generated_segments, 
         "video_path": None, # Clear legacy field
-        "ready_to_render_storyboards": [] # Clear source list
     }

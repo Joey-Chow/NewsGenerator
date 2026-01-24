@@ -19,40 +19,26 @@ def scheduler_node(state: AgentState):
     # The 'video_path' field will likely be empty during the preparation loop.
     new_segments = []
 
+    # BATCH MODE: Do NOT pop. Just pass the full list to the scraper.
     if not queue:
-        print("Scheduler: Queue empty. Proceeding to Batch Renderer.")
-        return {
-            "news_urls": [], 
-            "news_url": None, 
-            # We don't return generated_segments here anymore, 
-            # as the batch renderer will produce them.
-        }
+        print("Scheduler: Queue empty. Nothing to process.")
+        return {"news_urls": []}
 
-    # Pop next URL
-    next_url = queue[0]
-    remaining_urls = queue[1:]
-    
-    # Increment Index
-    next_idx = current_idx + 1
-    
-    print(f"Scheduler: Starting next URL ({next_idx}): {next_url}")
-    print(f"Scheduler: Remaining in queue: {len(remaining_urls)}")
+    print(f"Scheduler: Batch Mode - Passing {len(queue)} URLs to Scraper.")
 
-    # Return update to state
+    # Return update to state (Pass-through)
     return {
-        "news_urls": remaining_urls,
-        "news_url": next_url,
-        "current_video_index": next_idx,
-        "generated_segments": new_segments,
+        "news_urls": queue, # Keep full list
+        "current_video_index": 0, # Start at 0? Or 1? Let's say 0 and loop uses index+1
         
-        # Reset single-video state
+        # Reset single-video state (to be safe, though batch nodes overwrite)
         "storyboard": None,
         "script_draft": None,
         "audio_path": None,
         "video_path": None,
         "screenshot_paths": [],
-        "audios_map": {}, # Reset map if it exists
+        "audios_map": {}, 
         "images_map": {}, 
-        "is_approved": False, # Reset approval
+        "is_approved": False, 
         "user_feedback": None
     }

@@ -107,8 +107,9 @@ def editor_node(state: dict):
     2. **Visuals**:
        - **visual_instruction**: Instructions for human editor (Chinese/English).
        - **image_search_query**: SPECIFIC English search query for Google Images.
-         - Concrete subjects (e.g. "Stock market crash chart", "Joe Biden podium").
-         - Avoid abstract concepts.
+         - **Keywords**: Use terms like "real life photography", "news photo", "press photo".
+         - **Negative Constraints**: AVOID charts, diagrams, vectors, cartoons, generic icons, text slides.
+         - **Subjects**: Concrete subjects (e.g. "Stock market floor traders photo", "Joe Biden podium speech photo").
          - Ensure it is a valid search term.
        
     3. **General**:

@@ -7,7 +7,7 @@ from src.agents.ingest import human_asset_ingest_node
 from src.agents.scheduler import scheduler_node
 from src.agents.concat import concat_node
 from src.agents.batch_renderer import batch_video_renderer_node
-from langgraph.checkpoint.memory import MemorySaver
+from src.agents.namer import namer_node
 
 def human_review_node(state: AgentState):
     # This node serves as a breakpoint or review step
@@ -17,7 +17,10 @@ def human_review_node(state: AgentState):
     # FIX: Only return the NEW item. operator.add will append it to the existing list.
     to_append = [sb] if sb else []
     
-    return {"is_approved": True, "ready_to_render_storyboards": to_append}
+    return {
+        "is_approved": True, 
+        "ready_to_render_storyboards": to_append
+    }
 
 def should_render(state: AgentState):
     if state.get("is_approved"):
@@ -37,6 +40,7 @@ def build_graph():
     # Add nodes
     workflow.add_node("scheduler", scheduler_node)
     workflow.add_node("concat", concat_node)
+    workflow.add_node("namer", namer_node) # New namer node
     
     workflow.add_node("scraper", scraper_node)
     workflow.add_node("editor", editor_node)
@@ -82,8 +86,9 @@ def build_graph():
     # Batch Renderer -> Concat
     workflow.add_edge("batch_renderer", "concat")
     
-    # Final Output
-    workflow.add_edge("concat", END)
+    # Concat -> Namer -> End
+    workflow.add_edge("concat", "namer")
+    workflow.add_edge("namer", END)
 
     # Compile with interrupt and checkpointer
     checkpointer = MemorySaver()

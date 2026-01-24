@@ -203,8 +203,8 @@ export const MyComposition = () => {
             component={NewsSequence}
             durationInFrames={300}
             fps={30}
-            width={1280}
-            height={720}
+            width={2560}
+            height={1440}
             defaultProps={{
                 scenes: []
             }}

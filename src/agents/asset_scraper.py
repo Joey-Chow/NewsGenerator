@@ -39,7 +39,8 @@ async def asset_scraper_node(state: AgentState):
                 "engine": "google_images",
                 "q": query,
                 "api_key": api_key,
-                "num": 3  # Fetch up to 3 results for fallback
+                "num": 3,  # Fetch up to 3 results for fallback
+                "tbs": "itp:photo" # Photos only (Filters out clips/charts), Medium/Large allowed
             }
             
             resp = requests.get("https://serpapi.com/search", params=params, timeout=15)

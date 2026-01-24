@@ -85,7 +85,7 @@ def concat_node(state: AgentState):
         out_path = os.path.join(work_dir, output_name)
         cmd = [
             "ffmpeg", "-i", input_path,
-            "-vf", "scale=1280:720,fps=30,format=yuv420p",
+            "-vf", "scale=2560:1440,fps=30,format=yuv420p",
             "-c:v", "libx264", "-c:a", "aac", "-ar", "48000", "-ac", "2",
             "-y", out_path
         ]

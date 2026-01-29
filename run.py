@@ -8,6 +8,7 @@ load_dotenv()
 from src.graph import build_graph
 
 import sys
+import json
 
 async def main():
     print("🚀 Starting Serious News Automation System...")
@@ -25,11 +26,12 @@ async def main():
     # 📝 CONFIGURATION: Paste your URLs below (one per line)
     # ---------------------------------------------------------
     URLS_TEXT = """
-    https://www.cbc.ca/news/world/board-of-peace-gaza-trump-list-of-countries-9.7055866
-    https://www.theglobeandmail.com/business/economy/article-us-economy-gdp-growth-third-quarter-2025/
-    https://www.kitco.com/news/article/2026-01-22/inflation-remains-sticky-gold-prices-hold-support-above-4800
-    https://finance.yahoo.com/news/dollar-set-worst-week-since-083446295.html?guccounter=1&guce_referrer=aHR0cHM6Ly9uZXdzLmdvb2dsZS5jb20v&guce_referrer_sig=AQAAANQOu1SQNPEYR-6OO4ER0yxZirlM_0HNuTA0qPSbYFZ49Cc9xNy_rBMSqZgFWkaju1zsnxn0r3ITPXNJjE0BSMTZ4H9w3XSB1U0FcQ6cHtoAhlFR5TI8qWvxrz8UCS8T5ikJoorZ6tRO6e9d_qDXmY5xx0sxk5stGr0-47oyqwqz
-    https://www.economist.com/business/2026/01/22/chinese-ai-models-are-popular-but-can-they-make-money
+    https://www.bbc.com/news/articles/c3wz2x7ppz7o
+    https://www.theglobeandmail.com/world/article-trump-minneapolis-protests-ice-immigration/
+    https://www.bbc.com/news/articles/cly5pd459gko
+    https://www.bbc.com/news/articles/cevnppplkjjo
+    https://nationalpost.com/news/canada/carney-working-on-trip-to-india-and-possible-trade-deal
+    https://www.wsj.com/finance/gold-hits-new-high-oil-rises-as-iran-tensions-rekindle-fc112871
     """
     # ---------------------------------------------------------
     
@@ -80,6 +82,29 @@ async def main():
                 print("\n▶️ Resuming workflow...")
                 current_input = None # Resume
                 
+            elif "batch_editor" in next_steps:
+                print("\n" + "="*60)
+                print("⏸️  INTERRUPT 0: SCRAPER REVIEW")
+                print("="*60)
+                print("1. Please check 'output/scraped_data.json' for scraped content.")
+                print("2. Edit the headlines or text if needed.")
+                print("3. Save your changes.")
+                input("\n⌨️  Press ENTER to confirm data and continue to Editor...")
+                
+                # Reload data from file
+                try:
+                    with open("output/scraped_data.json", "r", encoding='utf-8') as f:
+                        updated_articles = json.load(f)
+                    
+                    # Update state
+                    app.update_state(config, {"scraped_articles": updated_articles})
+                    print("✅ Scraped data reloaded from file.")
+                except Exception as e:
+                    print(f"⚠️ Failed to reload scraped data: {e}. Using original data.")
+
+                print("\n▶️ Resuming workflow...")
+                current_input = None # Resume
+
             elif "batch_human_ingest" in next_steps:
                 print("\n" + "="*60)
                 print("⏸️  INTERRUPT 2: ASSET REVIEW")

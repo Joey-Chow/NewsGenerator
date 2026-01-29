@@ -33,13 +33,13 @@ def extract_content_from_html(html_content):
         text = article.get_text(separator="\n", strip=True)
     
     # Priority B: <main> tag (if article missing or too short)
-    if len(text) < 500:
+    if len(text) < 300:
         main_tag = soup.find('main')
         if main_tag:
             text = main_tag.get_text(separator="\n", strip=True)
             
     # Priority C: Aggressive <p> tag scraping (filter out short links/menus)
-    if len(text) < 500:
+    if len(text) < 300:
         paragraphs = soup.find_all('p')
         # Filter out very short paragraphs (likely menu items/footer) to reduce noise
         valid_paragraphs = [p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 30]
@@ -55,7 +55,7 @@ def batch_scraper_node(state: AgentState):
     """
     Hybrid Scraper:
     1. Try fast 'requests' fetch.
-    2. Fallback to 'playwright' (headless browser) if failed or content < 500 chars.
+    2. Fallback to 'playwright' (headless browser) if failed or content < 300 chars.
     """
     urls = state.get("news_urls", [])
     print(f"Batch Scraper: Processing {len(urls)} URLs...")
@@ -82,7 +82,7 @@ def batch_scraper_node(state: AgentState):
             resp = requests.get(url, headers=headers, timeout=10)
             if resp.status_code == 200:
                 text, headline = extract_content_from_html(resp.text)
-                if len(text) > 500:
+                if len(text) > 300:
                     content_found = True
                     print(f"    -> Success (Requests): {len(text)} chars")
                 else:
@@ -148,7 +148,12 @@ def batch_scraper_node(state: AgentState):
     if playwright_instance:
         playwright_instance.stop()
 
-    print(f"Batch Scraper: Completed. {len(scraped_data)}/{len(urls)} processed.")
+    # Save Scraped Data for Review
+    os.makedirs("output", exist_ok=True)
+    with open("output/scraped_data.json", "w", encoding='utf-8') as f:
+        json.dump(scraped_data, f, indent=2, ensure_ascii=False)
+        
+    print(f"Batch Scraper: Completed. {len(scraped_data)}/{len(urls)} processed. Saved to output/scraped_data.json")
     return {"scraped_articles": scraped_data}
 
 
@@ -172,13 +177,6 @@ def batch_editor_node(state: AgentState):
         return {"draft_storyboards": []}
 
     prompt_template = """
-    你是一个专业的新闻播报员。
-    当前时间是 2026 年 (请注意：不要使用你训练数据中的旧时间)。
-    关键事实修正：
-    - 唐纳德·特朗普 (Donald Trump) 是现任美国总统，不是前总统
-    - 卡尼 (Mark Carney) 是现任加拿大总理，不是特鲁多
-    - 报道风格必须严谨、客观。
-    
     You are a professional News Editor and Director. 
     Your task is to transform the provided news article into a video storyboard (JSON format).
 
@@ -193,15 +191,18 @@ def batch_editor_node(state: AgentState):
         },
         ...
       ],
-      "title": "Short Video Title",
-      "background_music_mood": "Mood description (e.g. suspenseful, upbeat)"
+      "title": "Video Title"
     }
 
     Guidelines:
     1. **Script (subtitle_text)**:
        - Language: Chinese (Mandarin).
-       - Tone: Serious, Professional.
-       - The FIRST scene's subtitle MUST explicitly cite the source.
+       - Tone: Professional, engaging, and authoritative.
+       - **Narrative Flow**: Ensure logical transitions between scenes. Avoid jumpy or fragmented sentences. 
+       - **Structure**:
+         - Scene 1: Hook & Source citation (e.g. "据路透社报道，今天发生了一件大事...").
+         - Middle Scenes: Explain the 'Why' and 'How'. Connect the facts into a story.
+         - Final Scene: Implication or future outlook.
        - Max 5-8 scenes total.
        - Each scene is one spoken sentence. 
        - NO trailing punctuation (strip '。').
@@ -218,6 +219,16 @@ def batch_editor_node(state: AgentState):
        
     3. **General**:
        - Return ONLY valid JSON.
+
+    4. **CRITICAL GOAL**
+       - Create a COHERENT, NARRATIVE-DRIVEN story, not just a list of facts. 
+       - The script should flow smoothly from one sentence to the next like a documentary or a feature news segment.
+
+    5. **CRITICAL FACTUAL CORRECTIONS**
+       - Current time is 2026.
+       - Donald Trump is the current President of the United States. Use the short form "Trump", not the full name "President Donald Trump".
+       - Mark Carney is the current Prime Minister of Canada, not Trudeau.
+       - Keir Starmer is the current Prime Minister of the United Kingdom.
     """
 
     generated_storyboards = []

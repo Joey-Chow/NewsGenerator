@@ -17,7 +17,6 @@ class Scene(BaseModel):
 class Storyboard(BaseModel):
     scenes: List[Scene]
     title: str
-    background_music_mood: str
     feedback: Optional[str] = None
     is_approved: bool = False
     sentences: Optional[List[str]] = None

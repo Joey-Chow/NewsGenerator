@@ -49,8 +49,8 @@ def build_graph():
     # Checkpointer for interrupt
     checkpointer = MemorySaver()
     
-    # Interrupt before script review AND asset review
-    return workflow.compile(checkpointer=checkpointer, interrupt_before=["batch_script_review", "batch_human_ingest"])
+    # Interrupt before script review AND asset review AND editor (for scraped data review)
+    return workflow.compile(checkpointer=checkpointer, interrupt_before=["batch_editor", "batch_script_review", "batch_human_ingest"])
 
 if __name__ == "__main__":
     app = build_graph()

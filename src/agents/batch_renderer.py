@@ -134,7 +134,6 @@ async def batch_video_renderer_node(state: dict):
         props = {
             "scenes": render_scenes,
             "title": storyboard.title,
-            "musicMood": storyboard.background_music_mood,
             "backgroundVideo": bg_public_name
         }
         props_json = json.dumps(props)

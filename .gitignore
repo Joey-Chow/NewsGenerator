@@ -5,7 +5,5 @@ remotion_project/public/*
 *.pyc
 .DS_Store
 remotion_project/node_modules
-
-assets/
 剪辑/assets/
 

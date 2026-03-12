@@ -40,13 +40,21 @@ async def batch_video_renderer_node(state: dict):
     
         # Process Background Video
         bg_public_name = None
-        # Support multiple extensions
-        bg_files = []
-        for ext in ["mp4", "mov", "webm"]:
-             bg_files.extend(glob.glob(f"assets/background/*.{ext}"))
-             
-        if bg_files:
-            bg_source = random.choice(bg_files)
+        
+        # Priority: assets/bg.mp4
+        bg_source = os.path.join(os.getcwd(), "assets", "bg.mp4")
+        
+        # Fallback: assets/background/*.ext
+        if not os.path.exists(bg_source):
+            bg_files = []
+            for ext in ["mp4", "mov", "webm"]:
+                 bg_files.extend(glob.glob(f"assets/background/*.{ext}"))
+            if bg_files:
+                bg_source = random.choice(bg_files)
+            else:
+                bg_source = None
+
+        if bg_source and os.path.exists(bg_source):
             bg_filename = f"background_{os.urandom(4).hex()}.mp4"
             dest_bg = os.path.join(public_dir, bg_filename)
             shutil.copy(bg_source, dest_bg)
@@ -127,8 +135,7 @@ async def batch_video_renderer_node(state: dict):
                 "text": scene.subtitle_text,
                 "image": img_public_name, # Can be video or image
                 "audio": audio_public_name,
-                "duration": scene.duration,
-                "snapshot": snapshot_public_name # Pass persistent snapshot to every scene
+                "duration": scene.duration
             })
     
         props = {

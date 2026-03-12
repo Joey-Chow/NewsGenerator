@@ -25,8 +25,8 @@ graph TD
     BS --> E[Batch Editor]
     E --> SR["⏸️ Script Review (Manual)"]
     SR --> AS[Batch Asset Scraper]
-    AS --> AR["⏸️ Asset Review (Manual)"]
-    AR --> R[Batch Reporter]
+    AS --> AI["⏸️ Asset Ingest (Manual)"]
+    AI --> R[Batch Reporter]
     R --> BR[Batch Renderer]
     BR --> C[Concat]
     C --> Y[Youtuber]
@@ -35,9 +35,12 @@ graph TD
 
 ### Core Components
 
-- **`run.py`**: The main entry point. Configure your target URLs inside this file.
-- **`src/graph.py`**: Defines the workflow logic and nodes.
-- **`src/agents/`**: Contains specialized agents for each step (Editor, Scraper, Renderer, etc.).
+- **`run.py`**: The main entry point. Automatically fetches news via RSS and manages the workflow.
+- **`src/graph.py`**: Defines the LangGraph workflow logic, checkpointers, and nodes.
+- **`src/agents/`**: Contains specialized agents:
+  - `scraper.py`, `editor.py`: Content ingestion and script generation.
+  - `ingest.py`: Manual review node for asset verification and storyboard reloading.
+  - `youtuber.py`: Generates YouTube metadata (titles, chapters, desc).
 - **`remotion_project/`**: The React-based video engine.
 
 ## 🛠️ Prerequisites
@@ -77,21 +80,22 @@ graph TD
     ```bash
     python run.py
     ```
-3.  **Interact with the Workflow**: The terminal will pause at three points for your review. Follow the instructions to check files in `output/` and press **ENTER** to proceed.
-4.  **Final Video**: Once finished, the concatenated video will be available as specified in the logs.
+3.  **Interact with the Workflow**: The terminal will pause at several points (Scraper, Script, and Asset review). Follow the instructions in the console to check/edit files in `output/` and press **ENTER** to proceed.
+4.  **Resuming from Interrupt**: If the workflow is interrupted (via `checkpoint`), it can be resumed by calling `app.invoke(None, config)` with the same `thread_id`. The current `run.py` handles this loop automatically.
+5.  **Final Video**: Once finished, the concatenated video and YouTube metadata (`output/youtube_metadata.txt`) will be ready.
 
 ## 📁 Project Structure
 
 ```text
 .
-├── run.py                 # Main entry point
+├── run.py                 # Main entry point (Resumable workflow)
 ├── src/
-│   ├── graph.py           # LangGraph workflow definition
-│   ├── state.py           # State management (AgentState)
-│   └── agents/            # Individual processing nodes
+│   ├── graph.py           # LangGraph workflow definition (w/ interrupts)
+│   ├── state.py           # State management (AgentState & Storyboard)
+│   └── agents/            # Specialized agents (Ingest, Youtuber, etc.)
 ├── remotion_project/      # Remotion/React video rendering logic
-├── output/                # All intermediate outputs and final videos
-├── assets/                # Static assets (logos, BGM)
+├── output/                # Intermediate outputs, storyboards, and final videos
+├── assets/                # Static assets (logos, BGM, bg.mp4)
 └── requirements.txt       # Python dependencies
 ```
 

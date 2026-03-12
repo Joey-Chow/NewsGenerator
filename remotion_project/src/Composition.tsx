@@ -12,7 +12,6 @@ type SceneProp = {
     title?: string; // Passed from parent
     isFirst?: boolean;
     isLast?: boolean;
-    snapshot?: string; // Optional snapshot image filename
 }
 
 type NewsVideoProps = {
@@ -22,7 +21,7 @@ type NewsVideoProps = {
     backgroundVideo?: string;
 }
 
-const NewsScene: React.FC<SceneProp> = ({ text, image, audio, title, isFirst, isLast, duration, snapshot }) => {
+const NewsScene: React.FC<SceneProp> = ({ text, image, audio, title, isFirst, isLast, duration }) => {
     // Determine if asset is video or image based on extension
     const isVideo = image && (image.endsWith('.mp4') || image.endsWith('.mov') || image.endsWith('.webm'));
 
@@ -59,19 +58,11 @@ const NewsScene: React.FC<SceneProp> = ({ text, image, audio, title, isFirst, is
                    - Handles Flex Layout (Snapshot | Floating Frame)
                 */}
                 <div
-                    className={`content-layout-container ${snapshot ? 'has-snapshot' : ''}`}
+                    className="content-layout-container"
                     style={{
                         transform: `translateX(${translateX}px)`,
                     }}
                 >
-                    {/* Snapshot Area (Optional - 30%) */}
-                    {snapshot && (
-                        <div className="snapshot-frame">
-                            {/* <div className="inset-overlay" /> */}
-                            {/* @ts-ignore */}
-                            <Img src={staticFile(snapshot)} className="visual-asset" />
-                        </div>
-                    )}
 
                     {/* Main Visual Asset (Floating Frame - 70% or 100% of container) */}
                     <div className="floating-frame">

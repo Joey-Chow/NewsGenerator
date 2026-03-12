@@ -1,6 +1,5 @@
 output/
 remotion_project/public/*
-.env
 .venv
 *.pyc
 .DS_Store

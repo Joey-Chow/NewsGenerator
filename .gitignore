@@ -1,8 +1,11 @@
 output/
-assets/
 remotion_project/public/*
 .env
 .venv
 *.pyc
 .DS_Store
 remotion_project/node_modules
+
+assets/
+剪辑/assets/
+

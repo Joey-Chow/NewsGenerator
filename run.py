@@ -21,24 +21,13 @@ async def main():
         print(f"Graph visualization skipped: {e}")
 
     # Execution
-    # Execution
     # ---------------------------------------------------------
-    # 📝 CONFIGURATION: Paste your URLs below (one per line)
+    # 📝 AUTOMATION: URLs are now automatically fetched from WSJ RSS.
+    # To manually add URLs, you can still append them to the 'news_urls' list below.
     # ---------------------------------------------------------
-    URLS_TEXT = """
-    https://www.bbc.com/news/articles/c3wz2x7ppz7o
-    https://www.theglobeandmail.com/world/article-trump-minneapolis-protests-ice-immigration/
-    https://www.bbc.com/news/articles/cly5pd459gko
-    https://www.bbc.com/news/articles/cevnppplkjjo
-    https://nationalpost.com/news/canada/carney-working-on-trip-to-india-and-possible-trade-deal
-    https://www.wsj.com/finance/gold-hits-new-high-oil-rises-as-iran-tensions-rekindle-fc112871
-    """
-    # ---------------------------------------------------------
+    urls = []
     
-    # Parse URLs from text block
-    urls = [line.strip() for line in URLS_TEXT.strip().splitlines() if line.strip()]
-    
-    print(f"\n▶️ Running workflow for: {urls}")
+    print(f"\n▶️ Running workflow (Fetching news from WSJ RSS)...")
     inputs = {
         "news_urls": urls,
         "generated_segments": [],

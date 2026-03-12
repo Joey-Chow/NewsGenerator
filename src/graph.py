@@ -1,7 +1,8 @@
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from src.state import AgentState
-from src.agents.editor import batch_scraper_node, batch_editor_node
+from src.agents.editor import batch_editor_node
+from src.agents.scraper import batch_scraper_node
 from src.agents.reporter import batch_reporter_node
 from src.agents.asset_scraper import batch_asset_scraper_node
 from src.agents.ingest import batch_human_asset_ingest_node, batch_human_script_review_node

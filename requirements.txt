@@ -1,11 +1,11 @@
 langgraph
 langchain
-langchain-openai
+langchain-core
+langchain-google-genai
 playwright
 pydantic
 python-dotenv
 grandalf
 beautifulsoup4
 requests
-langchain-google-genai
-
+mutagen

@@ -113,7 +113,7 @@ const NewsScene: React.FC<SceneProp> = ({ text, image, audio, title, isFirst, is
             {/* Sound Effect for Entrance */}
             {isFirst && (
                 // @ts-ignore
-                <Audio src={staticFile("swoosh.mp3")} startFrom={0} volume={0.5} />
+                <Audio src={staticFile("swoosh.mp3")} startFrom={0} volume={0.15} />
             )}
         </AbsoluteFill>
     );
@@ -156,6 +156,7 @@ const NewsSequence: React.FC<NewsVideoProps> = (props) => {
                             objectFit: 'cover',
                         }}
                         playbackRate={0.3}
+                        volume={0.15}
                     // Note: If video is shorter than composition, we might need a Loop, 
                     // but sticking to base requirement first.
                     />

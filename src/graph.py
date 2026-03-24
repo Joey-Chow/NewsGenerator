@@ -36,12 +36,22 @@ def build_graph():
     
     # Interrupt 1: Script Review (Check output/storyboard/*.json)
     workflow.add_edge("batch_editor", "batch_script_review")
-    workflow.add_edge("batch_script_review", "batch_photographer")
     
-    # Interrupt 2: Asset Review (Check output/assets_final/*.jpg)
-    workflow.add_edge("batch_photographer", "batch_human_ingest")
+    # Conditional Edge for Script Review (LLM Revision Loop)
+    def route_after_review(state: AgentState):
+        if state.get("user_feedback"):
+            print(f"Routing logic: 'user_feedback' detected. Routing BACK to batch_editor for revision.")
+            return "batch_editor"
+        print(f"Routing logic: No 'user_feedback' detected. Routing FORWARD to batch_photographer.")
+        return "batch_photographer"
+
+    workflow.add_conditional_edges(
+        "batch_script_review",
+        route_after_review,
+        {"batch_editor": "batch_editor", "batch_photographer": "batch_photographer"}
+    )
     
-    workflow.add_edge("batch_human_ingest", "batch_reporter")
+    workflow.add_edge("batch_photographer", "batch_reporter")
     workflow.add_edge("batch_reporter", "batch_renderer")
     workflow.add_edge("batch_renderer", "concat")
     workflow.add_edge("concat", "youtuber")
@@ -50,8 +60,8 @@ def build_graph():
     # Checkpointer for interrupt
     checkpointer = MemorySaver()
     
-    # Interrupt before script review AND asset review AND editor (for scraped data review)
-    return workflow.compile(checkpointer=checkpointer, interrupt_before=["batch_editor", "batch_script_review", "batch_human_ingest"])
+    # Interrupt ONLY before script review
+    return workflow.compile(checkpointer=checkpointer, interrupt_before=["batch_script_review"])
 
 if __name__ == "__main__":
     app = build_graph()

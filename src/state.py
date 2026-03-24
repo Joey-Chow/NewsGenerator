@@ -15,8 +15,8 @@ class Scene(BaseModel):
     duration: Optional[float] = None
 
 class Storyboard(BaseModel):
-    scenes: List[Scene]
     title: str
+    scenes: List[Scene]
     feedback: Optional[str] = None
     is_approved: bool = False
     sentences: Optional[List[str]] = None

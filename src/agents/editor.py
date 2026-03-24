@@ -9,10 +9,52 @@ def batch_editor_node(state: AgentState):
     Iterates through 'scraped_articles' and generates storyboards for the first 2 articles.
     Output: draft_storyboards (List[Storyboard])
     """
-    articles = state.get("scraped_articles", [])
+    global HumanMessage, SystemMessage
     
-    # Limit to the first 2 articles as requested
-    articles = articles[:2]
+    all_articles = state.get("scraped_articles", [])
+    user_feedback = state.get("user_feedback")
+    
+    # 1. Selection Phase: Pick which articles to process
+    if user_feedback and len(all_articles) > 0:
+        print(f"Batch Editor: LLM is dynamically selecting articles based on feedback: '{user_feedback}'")
+        # Prepare list of titles
+        title_list_str = "\n".join([f"[{i}] {a.get('title', 'Unknown Title')}" for i, a in enumerate(all_articles)])
+        
+        selection_prompt = f"""
+        The user rejected the previous draft and wants to change the news articles based on this feedback:
+        "{user_feedback}"
+        
+        Available scraped articles:
+        {title_list_str}
+        
+        Please select EXACTLY 2 articles from the list above that best match the user's new request.
+        If the user's feedback is just about style (e.g. "make it funny") and doesn't dictate a topic change, just return the first 2 indices: [0, 1].
+        
+        Return ONLY a JSON array of the 2 integer indices. Example: [2, 5]
+        """
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        if gemini_key:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            import re, json
+            try:
+                sel_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.1, google_api_key=gemini_key)
+                sel_response = sel_llm.invoke([HumanMessage(content=selection_prompt)])
+                match = re.search(r'\[\s*\d+\s*,\s*\d+\s*\]', sel_response.content)
+                if match:
+                    selected_indices = json.loads(match.group(0))
+                    print(f"Batch Editor: LLM dynamically selected indices: {selected_indices}")
+                    articles = [all_articles[i] for i in selected_indices if i < len(all_articles)]
+                else:
+                    print("Batch Editor: Failure to parse LLM array. Falling back to default.")
+                    articles = all_articles[:2]
+            except Exception as e:
+                print(f"Batch Editor: Selection failed: {e}")
+                articles = all_articles[:2]
+        else:
+            articles = all_articles[:2]
+    else:
+        # Default behavior
+        articles = all_articles[:2]
     
     print(f"Batch Editor: Processing {len(articles)} articles...")
     
@@ -25,6 +67,12 @@ def batch_editor_node(state: AgentState):
     else:
         print("Batch Editor Error: No GEMINI_API_KEY found.")
         return {"draft_storyboards": []}
+        
+    user_feedback = state.get("user_feedback")
+    feedback_instruction = ""
+    if user_feedback:
+        print(f"Batch Editor: Applying Global User Feedback: {user_feedback}")
+        feedback_instruction = f"\n\nCRITICAL USER FEEDBACK FOR REVISION:\nThe user rejected the previous draft and requested the following changes:\n\"{user_feedback}\"\nYou MUST strictly follow this feedback when generating the new storyboard!"
 
     prompt_template = """
     You are a professional News Editor and Director. 
@@ -33,6 +81,7 @@ def batch_editor_node(state: AgentState):
     Input: A news article text.
     Output: A JSON object matching the following structure:
     {
+      "title": "Video Title",
       "scenes": [
         {
           "id": 1,
@@ -40,8 +89,7 @@ def batch_editor_node(state: AgentState):
           "image_search_query": "English search query for Google Images"
         },
         ...
-      ],
-      "title": "Video Title"
+      ]
     }
 
     Guidelines:
@@ -79,7 +127,7 @@ def batch_editor_node(state: AgentState):
        - Donald Trump is the current President of the United States. Use the short form "Trump", not the full name "President Donald Trump".
        - Mark Carney is the current Prime Minister of Canada, not Trudeau.
        - Keir Starmer is the current Prime Minister of the United Kingdom.
-    """
+    """ + feedback_instruction
 
     generated_storyboards = []
 
@@ -123,4 +171,6 @@ def batch_editor_node(state: AgentState):
             # Don't append invalid content
 
     print(f"Batch Editor: Finished. {len(generated_storyboards)} drafts ready.")
-    return {"draft_storyboards": generated_storyboards}
+    
+    # Clear the user_feedback after processing so it doesn't loop indefinitely
+    return {"draft_storyboards": generated_storyboards, "user_feedback": None}

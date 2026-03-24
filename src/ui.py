@@ -24,8 +24,9 @@ ui_state = UIState()
 class StreamToGradio:
     def write(self, data):
         if data:
-            # Prepend for real-time terminal feel
-            ui_state.logs = str(data) + ui_state.logs
+            ui_state.logs += str(data)
+            if len(ui_state.logs) > 50000:
+                ui_state.logs = ui_state.logs[-50000:]
     def flush(self): pass
 
 log_stream = StreamToGradio()
@@ -163,7 +164,7 @@ def h_run_editor():
     json_data = load_selected_storyboard(val)
     return gr.update(choices=choices, value=val), json_data
 
-def pipeline_generator(is_start=False):
+def pipeline_generator(is_start=False, injected_state=None):
     with capture_output():
         snapshot = ui_state.app.get_state(ui_state.config)
         
@@ -174,6 +175,9 @@ def pipeline_generator(is_start=False):
             current_input = {"news_urls": [], "generated_segments": [], "news_url": None}
         else:
             print(f"▶️ Approving and Resuming pipeline (pending node: {snapshot.next})...")
+            if injected_state:
+                print(f"   -> Injecting state updates: {list(injected_state.keys())}")
+                ui_state.app.update_state(ui_state.config, injected_state)
             current_input = None
             
         def pull_ui_state(force_hide_popup=False):
@@ -240,6 +244,12 @@ def pipeline_generator(is_start=False):
 def h_run_approve():
     yield from pipeline_generator(is_start=False)
 
+def h_run_revise(prompt_text):
+    if not prompt_text or not prompt_text.strip():
+        # If they left it empty, just treat it as a normal approve or ignore
+        pass
+    yield from pipeline_generator(is_start=False, injected_state={"user_feedback": prompt_text.strip()})
+
 def h_run_photographer():
     execute_node_logic("Photographer")
     _, sel, aud, img, _, _ = fetch_media_state()
@@ -269,8 +279,11 @@ with gr.Blocks(title="NewsGen Dashboard", theme=gr.themes.Soft()) as demo:
     
     with gr.Group(visible=False) as approval_panel:
         gr.Markdown("## 🚨 ACTION REQUIRED: Pipeline Paused for Review")
-        gr.Markdown("The pipeline has automatically paused at a designated checkpoint. Please review the relevant files locally or adjust settings, then click the button below to approve and resume.")
-        b_approve_popup = gr.Button("✅ Confirm & Resume Pipeline", variant="stop")
+        gr.Markdown("The pipeline has automatically paused at a designated checkpoint. Please review the relevant files locally or adjust settings.")
+        prompt_input = gr.Textbox(label="Revision Prompt (Optional)", placeholder="e.g. Change the first news to something else, or make the whole script much funnier...")
+        b_revise_popup = gr.Button("🔄 Call LLM to Revise Script (With Changes)", variant="primary")
+        gr.Markdown("---")
+        b_approve_popup = gr.Button("✅ Confirm & Resume Pipeline (No Changes)", variant="stop")
         
     with gr.Row():
         with gr.Column(scale=1):
@@ -283,7 +296,7 @@ with gr.Blocks(title="NewsGen Dashboard", theme=gr.themes.Soft()) as demo:
                  b5 = gr.Button("5. Renderer")
                  b6 = gr.Button("6. Youtuber")
         with gr.Column(scale=2):
-            logs_view = gr.Textbox(label="Terminal Logs", lines=15, interactive=False, value=get_logs, every=1.0)
+            logs_view = gr.Textbox(label="Terminal Logs", lines=15, interactive=False, value=get_logs, every=1.0, autoscroll=True)
 
     with gr.Row():
         with gr.Column(scale=1):
@@ -317,6 +330,7 @@ with gr.Blocks(title="NewsGen Dashboard", theme=gr.themes.Soft()) as demo:
     # We use minimal progress so components aren't aggressively grayed out
     btn_all.click(h_run_all, outputs=std_all_outputs, show_progress="minimal")
     b_approve_popup.click(h_run_approve, outputs=std_all_outputs, show_progress="minimal")
+    b_revise_popup.click(h_run_revise, inputs=[prompt_input], outputs=std_all_outputs, show_progress="minimal")
     
     b1.click(h_run_scraper, outputs=[out_news], show_progress="minimal") 
     b2.click(h_run_editor, outputs=[story_selector, out_story_json], show_progress="minimal")

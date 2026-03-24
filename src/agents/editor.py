@@ -6,10 +6,14 @@ from src.state import AgentState, Storyboard
 # --- Batch Editor Step ---
 def batch_editor_node(state: AgentState):
     """
-    Iterates through 'scraped_articles' and generates storyboards for ALL of them.
+    Iterates through 'scraped_articles' and generates storyboards for the first 2 articles.
     Output: draft_storyboards (List[Storyboard])
     """
     articles = state.get("scraped_articles", [])
+    
+    # Limit to the first 2 articles as requested
+    articles = articles[:2]
+    
     print(f"Batch Editor: Processing {len(articles)} articles...")
     
     gemini_key = os.environ.get("GEMINI_API_KEY")
@@ -42,16 +46,16 @@ def batch_editor_node(state: AgentState):
 
     Guidelines:
     1. **Script (subtitle_text)**:
-       - Language: Chinese (Mandarin).
+       - Language: English.
        - Tone: Professional, engaging, and authoritative.
        - **Narrative Flow**: Ensure logical transitions between scenes. Avoid jumpy or fragmented sentences. 
        - **Structure**:
-         - Scene 1: Hook & Source citation (e.g. "据路透社报道，今天发生了一件大事...").
+         - Scene 1: Hook & Source citation (e.g. "According to Reuters, a major event occurred today...").
          - Middle Scenes: Explain the 'Why' and 'How'. Connect the facts into a story.
          - Final Scene: Implication or future outlook.
        - Max 5-8 scenes total.
        - Each scene is one spoken sentence. 
-       - NO trailing punctuation (strip '。').
+       - NO trailing punctuation (strip '.').
     
     2. **Visuals**:
        - **image_search_query**: SPECIFIC English search query for Google Images.

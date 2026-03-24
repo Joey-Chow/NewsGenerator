@@ -9,3 +9,4 @@ grandalf
 beautifulsoup4
 requests
 mutagen
+gradio

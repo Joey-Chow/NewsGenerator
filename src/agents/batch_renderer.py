@@ -12,8 +12,11 @@ async def batch_video_renderer_node(state: dict):
     storyboards = state.get("ready_to_render_storyboards", [])
     
     if not storyboards:
-        print("Batch Renderer: No storyboards ready to render.")
-        return {}
+        # Fallback for individual node testing
+        storyboards = state.get("draft_storyboards", [])
+        if not storyboards:
+            print("Batch Renderer: No storyboards ready to render.")
+            return {}
         
     generated_segments = []
     
@@ -151,19 +154,43 @@ async def batch_video_renderer_node(state: dict):
             "src/index.tsx", "NewsVideo",
             os.path.abspath(output_video_path),
             "--props", props_json,
-            "--log", "verbose"
+            "--log", "info"
         ]
         
         # Check node_modules
         if not os.path.exists(os.path.join(cwd, "node_modules")):
             subprocess.run(["npm", "install"], cwd=cwd, check=True)
         
-        print(f"Batch Renderer ({idx+1}): Executing Remotion render...")
+        print(f"Batch Renderer ({idx+1}): Executing Remotion render (Throttling terminal logs)...")
         try:
-            subprocess.run(cmd, cwd=cwd, check=True)
-            print(f"Batch Renderer ({idx+1}): Video saved to {output_video_path}")
-            generated_segments.append(output_video_path)
-        except subprocess.CalledProcessError as e:
+            import re
+            process = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            for line in process.stdout:
+                line = line.strip()
+                if not line: continue
+                
+                # Throttle rapid progress lines
+                if line.startswith("Rendering") or line.startswith("Stitching"):
+                    match = re.search(r'(\d+)/(\d+)', line)
+                    if match:
+                        current = int(match.group(1))
+                        total = int(match.group(2))
+                        # Only show every 50th frame, or exactly the first/last
+                        if current == 1 or current == total or current % 50 == 0:
+                            print(f"  -> {line}")
+                    else:
+                        print(f"  -> {line}")
+                else:
+                    # Show all other non-spam messages normally
+                    print(f"  -> {line}")
+                    
+            process.wait()
+            if process.returncode != 0:
+                print(f"Batch Renderer Error ({idx+1}): Remotion failed (exit {process.returncode})")
+            else:
+                print(f"Batch Renderer ({idx+1}): Video saved to {output_video_path}")
+                generated_segments.append(output_video_path)
+        except Exception as e:
             print(f"Batch Renderer Error ({idx+1}): {e}")
         finally:
             # Cleanup

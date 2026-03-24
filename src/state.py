@@ -37,6 +37,7 @@ class AgentState(TypedDict):
     # Stage 6 Output
     generated_segments: List[str]
     final_video_path: Optional[str]
+    youtube_url: Optional[str]
     
     # --- Deprecated / Temporary / Loop Fields ---
     # These might be used inside nodes locally but shouldn't retain state across stages ideally

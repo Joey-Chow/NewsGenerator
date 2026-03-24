@@ -85,7 +85,7 @@ const NewsScene: React.FC<SceneProp> = ({ text, image, audio, title, isFirst, is
                 {title && (
                     <div className="headline-container">
                         {/* Layer 1: Channel Brand */}
-                        <div className="headline-brand">全球每日快讯</div>
+                        <div className="headline-brand">Global Daily News</div>
 
                         {/* Layer 2: Content */}
                         <div className="headline-content">

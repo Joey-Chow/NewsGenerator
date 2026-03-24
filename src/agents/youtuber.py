@@ -5,6 +5,44 @@ import glob
 import subprocess
 from src.state import AgentState, Storyboard
 
+# --- YouTube API Imports ---
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+
+SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+
+def authenticate_youtube():
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+    
+    creds = None
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+        
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            client_secret_file = "client_secrets.json"
+            if not os.path.exists(client_secret_file):
+                if os.path.exists("client_secret.json"):
+                    client_secret_file = "client_secret.json"
+                else:
+                    print("====================================")
+                    print("❌ Youtuber Error: Missing 'client_secrets.json'.")
+                    print("Please download it from Google Cloud Console and place it in the project root to enable actual YouTube uploads.")
+                    print("====================================")
+                    return None
+            flow = InstalledAppFlow.from_client_secrets_file(client_secret_file, SCOPES)
+            creds = flow.run_local_server(port=0)
+            
+        with open("token.json", "w") as token:
+            token.write(creds.to_json())
+            
+    return build("youtube", "v3", credentials=creds)
+
 def get_media_duration(file_path):
     try:
         cmd = [
@@ -42,9 +80,9 @@ def youtuber_node(state: AgentState):
 
     # --- 1. Title Generation ---
     full_titles = [sb.title for sb in storyboards if sb.title]
-    date_str = datetime.datetime.now().strftime("%-m月%-d日")
+    date_str = datetime.datetime.now().strftime("%B %-d")
     combined_titles = " | ".join(full_titles)
-    final_title = f"{date_str}要闻：{combined_titles}"
+    final_title = f"{date_str} News Update: {combined_titles}"
 
     # --- 2. Chapter & Description Generation ---
     intro_path = "assets/intro.mov"
@@ -54,7 +92,7 @@ def youtuber_node(state: AgentState):
     description_paragraphs = []
     
     # 00:00 Intro
-    chapter_lines.append(f"{format_timestamp(current_time)} 开场 Intro")
+    chapter_lines.append(f"{format_timestamp(current_time)} Intro")
     
     # Get intro duration (usually ~4.5s)
     intro_dur = get_media_duration(intro_path) or 4.5
@@ -66,9 +104,9 @@ def youtuber_node(state: AgentState):
         chapter_lines.append(f"{timestamp} {sb.title}")
         
         # Description Paragraph (Join all script sentences)
-        paragraph = "".join([s.subtitle_text for s in sb.scenes])
+        paragraph = " ".join([s.subtitle_text for s in sb.scenes])
         # Add period if missing for visual separation in description
-        if not paragraph.endswith('。'): paragraph += '。'
+        if not paragraph.endswith('.'): paragraph += '.'
         description_paragraphs.append(paragraph)
         
         # Increment time
@@ -76,19 +114,19 @@ def youtuber_node(state: AgentState):
         current_time += sb_dur
         
     # Final Outro
-    chapter_lines.append(f"{format_timestamp(current_time)} 结语 Outro")
+    chapter_lines.append(f"{format_timestamp(current_time)} Outro")
     
     # --- Assemble Final Metadata ---
     metadata_content = []
-    metadata_content.append("【视频标题】")
+    metadata_content.append("[Video Title]")
     metadata_content.append(final_title)
     metadata_content.append("\n" + "="*20 + "\n")
     
-    metadata_content.append("【章节时间戳】")
+    metadata_content.append("[Chapters]")
     metadata_content.append("\n".join(chapter_lines))
     metadata_content.append("\n" + "="*20 + "\n")
     
-    metadata_content.append("【视频简介】")
+    metadata_content.append("[Description]")
     metadata_content.append("\n\n".join(description_paragraphs))
     
     final_text = "\n".join(metadata_content)
@@ -102,7 +140,46 @@ def youtuber_node(state: AgentState):
     print(f"Youtuber: Metadata generated and saved to {output_path}")
     print(f"Youtuber: Title: {final_title}")
     
-    return {"final_video_path": state.get("final_video_path")}
+    # --- 3. Actual YouTube API Upload ---
+    final_video_path = state.get("final_video_path")
+    
+    # Format actual YouTube description based on limits
+    upload_desc = f"{combined_titles}\n\n[Chapters]\n" + "\n".join(chapter_lines) + "\n\n" + "\n\n".join(description_paragraphs)
+    upload_title = final_title if len(final_title) <= 100 else final_title[:97] + "..."
+    
+    if final_video_path and os.path.exists(final_video_path):
+        youtube_client = authenticate_youtube()
+        if youtube_client:
+            try:
+                print(f"Youtuber: Uploading {final_video_path} to YouTube... (This may take a while)")
+                request = youtube_client.videos().insert(
+                    part="snippet,status",
+                    body={
+                      "snippet": {
+                        "categoryId": "25", # News & Politics
+                        "description": upload_desc[:4900], # Safety max 5000
+                        "title": upload_title,
+                        "tags": ["News", "AI News", "Current Events", "Update"]
+                      },
+                      "status": {
+                        "privacyStatus": "public", # Publish immediately as requested
+                        "selfDeclaredMadeForKids": False, 
+                      }
+                    },
+                    media_body=MediaFileUpload(final_video_path, chunksize=-1, resumable=True)
+                )
+                response = request.execute()
+                yt_url = f"https://youtu.be/{response['id']}"
+                print(f"✅ Youtuber: Upload Successful! Video URL: {yt_url}")
+                return {"final_video_path": final_video_path, "youtube_url": yt_url}
+            except Exception as e:
+                print(f"❌ Youtuber Upload Error: {e}")
+        else:
+            print("Youtuber: Skipping automated YouTube upload due to missing credentials.")
+    else:
+        print("Youtuber: 'final_video_path' not found or does not exist. Cannot upload video.")
+    
+    return {"final_video_path": final_video_path}
 
 # --- Standalone Test Block ---
 if __name__ == "__main__":

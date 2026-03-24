@@ -4,15 +4,13 @@ NewsGenerator is a powerful automation system designed to transform news article
 
 ## 🚀 Key Features
 
-- **Multi-Source Scraping**: Automatically extracts content from a list of URLs (BBC, WSJ, etc.).
-- **AI-Powered Editorial**: Uses LLMs to refine news content, write scripts (in Chinese), and generate visual instructions (storyboards).
-- **Human-in-the-Loop (HITL)**: Provides three strategic manual review points to ensure quality:
-  1.  **Scraper Review**: Verify and edit scraped news data.
-  2.  **Script Review**: Polish the generated script and visual prompts.
-  3.  **Asset Review**: Double-check or replace downloaded images/videos before rendering.
-- **Automated Asset Sourcing**: Automatically searches and downloads images based on the generated storyboard.
-- **High-Quality Rendering**: Uses **Remotion** (React/TypeScript) to render pixel-perfect video segments.
-- **Smart Concatenation**: Merges individual news segments into a final full-length video, including background music and intro/outro management.
+- **Multi-Source Scraping**: Automatically extracts content from a list of URLs (The Globe and Mail, etc.).
+- **Global English Support**: Full pipeline conversion to English, including LLM script generation and metadata.
+- **Azure TTS**: High-quality English voiceover using Azure's `en-US-AndrewMultilingualNeural` voice.
+- **AI-Powered Editorial**: Uses LLMs to refine news content, write scripts (in English), and generate visual instructions (storyboards).
+- **Human-in-the-Loop (HITL)**: Provides three strategic manual review points to ensure quality.
+- **Automated Photographer**: Automatically searches and downloads images based on the generated storyboard.
+- **Interactive UI**: Gradio-based dashboard for one-click generation and step-by-step testing.
 
 ## 🏗️ Architecture & Workflow
 
@@ -24,8 +22,8 @@ graph TD
     B --> BS["⏸️ Scraper Review (Manual)"]
     BS --> E[Batch Editor]
     E --> SR["⏸️ Script Review (Manual)"]
-    SR --> AS[Batch Asset Scraper]
-    AS --> AI["⏸️ Asset Ingest (Manual)"]
+    SR --> P[Batch Photographer]
+    P --> AI["⏸️ Asset Ingest (Manual)"]
     AI --> R[Batch Reporter]
     R --> BR[Batch Renderer]
     BR --> C[Concat]
@@ -75,14 +73,29 @@ graph TD
 
 ## 🎮 Usage
 
-1.  **Configure URLs**: Open `run.py` and paste your target news URLs into the `URLS_TEXT` block.
+### Method A: Interactive Gradio UI (Recommended)
+
+This provides a visual dashboard to run the pipeline or test individual steps.
+
+```bash
+source .venv/bin/activate
+python3 app.py
+```
+
+Open the provided local URL (usually `http://127.0.0.1:7860`) in your browser.
+
+### Method B: Console Execution (Manual/Batch)
+
+1.  **Configure URLs**: Open `run.py` or use the RSS feeds configured in `src/agents/scraper.py`.
 2.  **Start the System**:
     ```bash
     python run.py
     ```
 3.  **Interact with the Workflow**: The terminal will pause at several points (Scraper, Script, and Asset review). Follow the instructions in the console to check/edit files in `output/` and press **ENTER** to proceed.
-4.  **Resuming from Interrupt**: If the workflow is interrupted (via `checkpoint`), it can be resumed by calling `app.invoke(None, config)` with the same `thread_id`. The current `run.py` handles this loop automatically.
-5.  **Final Video**: Once finished, the concatenated video and YouTube metadata (`output/youtube_metadata.txt`) will be ready.
+
+### Final Video
+
+Once finished, the concatenated video and YouTube metadata (`output/youtube_metadata.txt`) will be ready in the `output/` directory.
 
 ## 📁 Project Structure
 

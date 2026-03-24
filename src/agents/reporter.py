@@ -28,37 +28,33 @@ async def batch_reporter_node(state: AgentState):
     
     storyboards = state.get("ready_to_render_storyboards", [])
     if not storyboards:
-        print("Batch Reporter: No storyboards ready.")
-        return {"ready_to_render_storyboards": []}
+        # Fallback for individual node testing (bypassing ingest node)
+        storyboards = state.get("draft_storyboards", [])
+        if not storyboards:
+            print("Batch Reporter: No storyboards ready.")
+            return {"ready_to_render_storyboards": []}
 
     # Load credentials
-    APPID = os.getenv("VOLC_APPID")
-    TOKEN = os.getenv("VOLC_ACCESS_TOKEN")
-    VOICE_TYPE = os.getenv("VOLC_VOICE_TYPE", "BV001_streaming") 
-    CLUSTER = "volcano_tts"
+    AZURE_KEY = os.getenv("AZURE_TTS_KEY")
+    AZURE_REGION = os.getenv("AZURE_TTS_REGION")
+    AZURE_VOICE = os.getenv("AZURE_TTS_VOICE", "en-US-AndrewMultilingualNeural")
 
-    if not APPID or not TOKEN:
-        print("Batch Reporter Error: Missing VOLC_APPID or VOLC_ACCESS_TOKEN.")
+    if not AZURE_KEY or not AZURE_REGION:
+        print("Batch Reporter Error: Missing AZURE_TTS_KEY or AZURE_TTS_REGION.")
         return {"ready_to_render_storyboards": storyboards} # Return as is (failed audio)
 
-    api_url = "https://openspeech.bytedance.com/api/v1/tts"
-    header = {"Authorization": f"Bearer;{TOKEN}"}
+    api_url = f"https://{AZURE_REGION}.tts.speech.microsoft.com/cognitiveservices/v1"
+    headers = {
+        "Ocp-Apim-Subscription-Key": AZURE_KEY,
+        "Content-Type": "application/ssml+xml",
+        "X-Microsoft-OutputFormat": "audio-16khz-128kbitrate-mono-mp3",
+        "User-Agent": "NewsGenerator"
+    }
 
     output_dir = "output/audio"
     os.makedirs(output_dir, exist_ok=True)
     
-    # Snapshot Logic: traditionally screenshot_paths were generated separately. 
-    # For now, let's assume we proceed with just the audio generation part here.
-    # If snapshot logic is needed (30/70 layout), it usually comes from scraping the page screenshot.
-    # Let's add basic snapshot logic if we have URLs? 
-    # Actually, in batch flow, we lost the 1:1 mapping if we don't store URL in storyboard.
-    # But Storyboard doesn't have URL field in current model? 
-    # Actually `Batch Editor` didn't save URL into Storyboard model.
-    # We might need to rely on the user provided assets or skip the "Website Snapshot" feature if not critical,
-    # OR we assume the "Asset Scraper" fetched relevant images.
-    # The user request mentioned "snapshot layout", so we should ensure we have a snapshot.
-    # Let's check if we can reuse the first image as snapshot if no specific snapshot exists.
-    
+    # Snapshot Logic...
     snapshot_dir = "output/snapshot"
     os.makedirs(snapshot_dir, exist_ok=True)
 
@@ -79,44 +75,30 @@ async def batch_reporter_node(state: AgentState):
                 
             print(f"    - Scene {scene.id} TTS...")
             
-            request_json = {
-                "app": {"appid": APPID, "token": "access_token", "cluster": CLUSTER},
-                "user": {"uid": "news_generator_user"},
-                "audio": {
-                    "voice_type": VOICE_TYPE,
-                    "encoding": "mp3",
-                    "speed_ratio": 1.15,
-                    "volume_ratio": 1.0,
-                    "pitch_ratio": 1.0,
-                },
-                "request": {
-                    "reqid": str(uuid.uuid4()),
-                    "text": text,
-                    "text_type": "plain",
-                    "operation": "query",
-                    "with_timestamp": 0 
-                },
-            }
+            # Escape XML special characters in text
+            xml_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
+            
+            ssml = f"""<speak version='1.0' xml:lang='en-US'>
+                <voice xml:lang='en-US' xml:gender='Male' name='{AZURE_VOICE}'>
+                    {xml_text}
+                </voice>
+            </speak>"""
 
             try:
-                resp = requests.post(api_url, json=request_json, headers=header)
+                resp = requests.post(api_url, data=ssml.encode('utf-8'), headers=headers)
                 if resp.status_code == 200:
-                    resp_data = resp.json()
-                    if "data" in resp_data:
-                        audio_data = base64.b64decode(resp_data["data"])
-                        # Unique filename: scene_{vid}_{sid}.mp3
-                        audio_path = f"{output_dir}/scene_{video_id}_{scene.id}.mp3"
-                        
-                        with open(audio_path, "wb") as f:
-                            f.write(audio_data)
-                        
-                        scene.audio_path = os.path.abspath(audio_path)
-                        scene.duration = get_audio_duration_mutagen(audio_path)
-                        print(f"      -> Saved Audio ({scene.duration:.2f}s)")
-                    else:
-                        print(f"      -> No data in response")
+                    audio_data = resp.content
+                    # Unique filename: scene_{vid}_{sid}.mp3
+                    audio_path = f"{output_dir}/scene_{video_id}_{scene.id}.mp3"
+                    
+                    with open(audio_path, "wb") as f:
+                        f.write(audio_data)
+                    
+                    scene.audio_path = os.path.abspath(audio_path)
+                    scene.duration = get_audio_duration_mutagen(audio_path)
+                    print(f"      -> Saved Audio ({scene.duration:.2f}s)")
                 else:
-                    print(f"      -> API Error {resp.status_code}")
+                    print(f"      -> API Error {resp.status_code}: {resp.text}")
             except Exception as e:
                 print(f"      -> Error: {e}")
             
@@ -124,12 +106,9 @@ async def batch_reporter_node(state: AgentState):
         
         storyboard.scenes = updated_scenes
         
-        # Snapshot Placeholder Generation (if missing)
-        # We need a snapshot for the 30% layout.
-        # Let's duplicate the first scene's image as the snapshot if not present.
+        # Snapshot Placeholder Generation...
         snapshot_path = os.path.join(snapshot_dir, f"snapshot_{video_id}.png")
         if not os.path.exists(snapshot_path):
-            # Try finding first valid image in scenes
             first_img = next((s.final_asset_path for s in storyboard.scenes if s.final_asset_path), None)
             if first_img and os.path.exists(first_img):
                 import shutil

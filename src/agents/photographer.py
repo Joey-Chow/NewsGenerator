@@ -3,19 +3,19 @@ import requests
 import mimetypes
 from src.state import AgentState
 
-# --- Batch Asset Scraper ---
-def batch_asset_scraper_node(state: AgentState):
+# --- Batch Photographer ---
+def batch_photographer_node(state: AgentState):
     """
     Iterates through 'draft_storyboards' and fetches images for ALL scenes.
     Output: draft_storyboards (Updated with asset paths)
     """
     storyboards = state.get("draft_storyboards", [])
-    print(f"Batch Asset Scraper: Processing {len(storyboards)} storyboards...")
+    print(f"Batch Photographer: Processing {len(storyboards)} storyboards...")
     
     # 1. Get API Key
     api_key = os.environ.get("SERPAPI_API_KEY")
     if not api_key:
-        print("Batch Asset Scraper Error: Missing SERPAPI_API_KEY.")
+        print("Batch Photographer Error: Missing SERPAPI_API_KEY.")
         return {"draft_storyboards": storyboards} # Return unmodified
 
     output_dir = "output/assets_final"
@@ -25,7 +25,7 @@ def batch_asset_scraper_node(state: AgentState):
     
     for video_idx_0, storyboard in enumerate(storyboards):
         video_id = video_idx_0 + 1
-        print(f"  - Scraper: Processing Storyboard {video_id} ('{storyboard.title}')...")
+        print(f"  - Photographer: Processing Storyboard {video_id} ('{storyboard.title}')...")
         
         updated_scenes = []
         for scene in storyboard.scenes:
@@ -96,5 +96,5 @@ def batch_asset_scraper_node(state: AgentState):
         storyboard.scenes = updated_scenes
         updated_storyboards.append(storyboard)
 
-    print("Batch Asset Scraper: Finished.")
+    print("Batch Photographer: Finished.")
     return {"draft_storyboards": updated_storyboards}

@@ -9,5 +9,10 @@ grandalf
 beautifulsoup4
 requests
 mutagen
-gradio
+gradio>=4.44.1
+fastapi
+starlette
 langgraph-cli[inmem]
+google-api-python-client
+google-auth-oauthlib
+google-auth

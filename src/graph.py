@@ -10,60 +10,70 @@ from src.agents.scheduler import scheduler_node
 from src.agents.concat import concat_node
 from src.agents.batch_renderer import batch_video_renderer_node
 from src.agents.youtuber import youtuber_node
+from src.agents.joiner import join_assets_node
 
-def build_graph():
+def build_graph(checkpointer=None):
     workflow = StateGraph(AgentState)
 
     # Add Nodes
     workflow.add_node("scheduler", scheduler_node)
-    workflow.add_node("batch_scraper", batch_scraper_node)
-    workflow.add_node("batch_editor", batch_editor_node)
-    workflow.add_node("batch_script_review", batch_human_script_review_node) # New Node
-    workflow.add_node("batch_photographer", batch_photographer_node)
-    workflow.add_node("batch_human_ingest", batch_human_asset_ingest_node)
-    workflow.add_node("batch_reporter", batch_reporter_node)
-    workflow.add_node("batch_renderer", batch_video_renderer_node)
+    workflow.add_node("scraper", batch_scraper_node)
+    workflow.add_node("editor", batch_editor_node)
+    workflow.add_node("script_review", batch_human_script_review_node)
+    workflow.add_node("photographer", batch_photographer_node)
+    workflow.add_node("human_ingest", batch_human_asset_ingest_node)
+    workflow.add_node("reporter", batch_reporter_node)
+    workflow.add_node("renderer", batch_video_renderer_node)
     workflow.add_node("concat", concat_node)
     workflow.add_node("youtuber", youtuber_node)
+    workflow.add_node("join_assets", join_assets_node)
 
     # Set Entry Point
     workflow.set_entry_point("scheduler")
 
     # Define Linear Flow
-    # Scheduler loads list of URLs -> Scraper
-    workflow.add_edge("scheduler", "batch_scraper")
-    workflow.add_edge("batch_scraper", "batch_editor")
+    workflow.add_edge("scheduler", "scraper")
+    workflow.add_edge("scraper", "editor")
     
-    # Interrupt 1: Script Review (Check output/storyboard/*.json)
-    workflow.add_edge("batch_editor", "batch_script_review")
+    # Interrupt 1: Script Review
+    workflow.add_edge("editor", "script_review")
     
-    # Conditional Edge for Script Review (LLM Revision Loop)
+    # Conditional Edge for Script Review
     def route_after_review(state: AgentState):
         if state.get("user_feedback"):
-            print(f"Routing logic: 'user_feedback' detected. Routing BACK to batch_editor for revision.")
-            return "batch_editor"
-        print(f"Routing logic: No 'user_feedback' detected. Routing FORWARD to batch_photographer.")
-        return "batch_photographer"
+            print(f"Routing logic: 'user_feedback' detected. Routing BACK to editor for revision.")
+            return "editor"
+        print(f"Routing logic: No 'user_feedback' detected. Routing FORWARD to Parallel branch (photographer & reporter).")
+        return ["photographer", "reporter"]
 
     workflow.add_conditional_edges(
-        "batch_script_review",
+        "script_review",
         route_after_review,
-        {"batch_editor": "batch_editor", "batch_photographer": "batch_photographer"}
+        {
+            "editor": "editor", 
+            "photographer": "photographer", 
+            "reporter": "reporter"
+        }
     )
     
-    workflow.add_edge("batch_photographer", "batch_reporter")
-    workflow.add_edge("batch_reporter", "batch_renderer")
-    workflow.add_edge("batch_renderer", "concat")
+    # Parallel Workflow Branch
+    workflow.add_edge("photographer", "join_assets")
+    workflow.add_edge("reporter", "join_assets")
+    
+    workflow.add_edge("join_assets", "renderer")
+    workflow.add_edge("renderer", "concat")
     workflow.add_edge("concat", "youtuber")
     workflow.add_edge("youtuber", END)
 
 
     # Checkpointer for interrupt
-    # NOTE: LangGraph Studio handles persistence automatically. 
-    # Providing a manual MemorySaver here causes an error in Studio.
-    return workflow.compile(interrupt_before=["batch_script_review"])
+    return workflow.compile(
+        interrupt_before=["script_review"],
+        checkpointer=checkpointer
+    )
 
 
+# For LangGraph Studio (no manual checkpointer)
 app = build_graph()
 
 if __name__ == "__main__":

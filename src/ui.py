@@ -15,7 +15,8 @@ load_dotenv()
 class UIState:
     def __init__(self):
         self.logs = "--- Serious News Automation Dashboard Ready ---\n"
-        self.app = build_graph()
+        from langgraph.checkpoint.memory import MemorySaver
+        self.app = build_graph(checkpointer=MemorySaver())
         self.config = {"configurable": {"thread_id": "gradio_thread"}}
 
 ui_state = UIState()

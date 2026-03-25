@@ -10,3 +10,4 @@ beautifulsoup4
 requests
 mutagen
 gradio
+langgraph-cli[inmem]

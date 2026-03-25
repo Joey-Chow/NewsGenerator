@@ -57,14 +57,16 @@ def build_graph():
     workflow.add_edge("concat", "youtuber")
     workflow.add_edge("youtuber", END)
 
+
     # Checkpointer for interrupt
-    checkpointer = MemorySaver()
-    
-    # Interrupt ONLY before script review
-    return workflow.compile(checkpointer=checkpointer, interrupt_before=["batch_script_review"])
+    # NOTE: LangGraph Studio handles persistence automatically. 
+    # Providing a manual MemorySaver here causes an error in Studio.
+    return workflow.compile(interrupt_before=["batch_script_review"])
+
+
+app = build_graph()
 
 if __name__ == "__main__":
-    app = build_graph()
     print("Graph compiled successfully.")
     try:
         print(app.get_graph().draw_ascii())

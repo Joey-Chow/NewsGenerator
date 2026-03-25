@@ -93,9 +93,21 @@ Open the provided local URL (usually `http://127.0.0.1:7860`) in your browser.
     ```
 3.  **Interact with the Workflow**: The terminal will pause at several points (Scraper, Script, and Asset review). Follow the instructions in the console to check/edit files in `output/` and press **ENTER** to proceed.
 
-### Final Video
+### Method C: LangGraph Studio (Visual Debugging)
 
-Once finished, the concatenated video and YouTube metadata (`output/youtube_metadata.txt`) will be ready in the `output/` directory.
+For a fully interactive, visual way to run and debug the workflow:
+
+1.  **Install requirements**:
+    ```bash
+    pip install "langgraph-cli[all]"
+    ```
+2.  **Start the Dev Server**:
+    In the project root, run:
+    ```bash
+    langgraph dev
+    ```
+3.  **Open in Browser**:
+    Follow the printed link (e.g., `https://smith.langchain.com/studio/...`) to see the node graph. You can start the pipeline from any node, view state changes, and handle interrupts visually.
 
 ## 📁 Project Structure
 

@@ -3,6 +3,7 @@ import glob
 import subprocess
 import json
 import asyncio
+from langgraph.types import interrupt
 from src.state import AgentState, Storyboard
 
 def get_media_duration(file_path):
@@ -24,6 +25,9 @@ async def batch_human_script_review_node(state: AgentState):
     Breakpoint Node.
     Allows user to manually edit the storyboard JSON files in 'output/storyboard/'.
     """
+    # Explicit interrupt for clearer HITL visibility in LangSmith
+    interrupt("Confirming Storyboard Review: Please review and edit the JSON files in 'output/storyboard/' manually if needed.")
+
     def sync_review():
         print("Script Review: Reloading storyboards from disk...")
         storyboard_dir = "output/storyboard"

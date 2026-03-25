@@ -5,7 +5,7 @@ from src.agents.editor import batch_editor_node
 from src.agents.scraper import batch_scraper_node
 from src.agents.reporter import batch_reporter_node
 from src.agents.photographer import batch_photographer_node
-from src.agents.ingest import batch_human_asset_ingest_node, batch_human_script_review_node
+from src.agents.ingest import batch_human_script_review_node
 from src.agents.scheduler import scheduler_node
 from src.agents.concat import concat_node
 from src.agents.batch_renderer import batch_video_renderer_node
@@ -21,7 +21,6 @@ def build_graph(checkpointer=None):
     workflow.add_node("editor", batch_editor_node)
     workflow.add_node("script_review", batch_human_script_review_node)
     workflow.add_node("photographer", batch_photographer_node)
-    workflow.add_node("human_ingest", batch_human_asset_ingest_node)
     workflow.add_node("reporter", batch_reporter_node)
     workflow.add_node("renderer", batch_video_renderer_node)
     workflow.add_node("concat", concat_node)
@@ -68,7 +67,6 @@ def build_graph(checkpointer=None):
 
     # Checkpointer for interrupt
     return workflow.compile(
-        interrupt_before=["script_review"],
         checkpointer=checkpointer
     )
 

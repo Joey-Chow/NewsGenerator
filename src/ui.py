@@ -122,14 +122,13 @@ def execute_node_logic(node_name):
     from src.agents.scraper import batch_scraper_node
     from src.agents.batch_renderer import batch_video_renderer_node
     from src.agents.youtuber import youtuber_node
-    from src.agents.ingest import batch_human_script_review_node, batch_human_asset_ingest_node
+    from src.agents.ingest import batch_human_script_review_node
 
     mapping = {
         "Scraper": batch_scraper_node, 
         "Editor": batch_editor_node,
         "ScriptReview": batch_human_script_review_node,
         "Photographer": batch_photographer_node, 
-        "AssetIngest": batch_human_asset_ingest_node,
         "Reporter": batch_reporter_node,
         "Renderer": batch_video_renderer_node, 
         "Youtuber": youtuber_node

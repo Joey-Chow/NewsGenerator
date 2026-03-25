@@ -104,6 +104,7 @@ For a fully interactive, visual way to run and debug the workflow:
 2.  **Start the Dev Server**:
     In the project root, run:
     ```bash
+    source .venv/bin/activate
     langgraph dev
     ```
 3.  **Open in Browser**:

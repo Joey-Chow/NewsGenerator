@@ -39,6 +39,13 @@ def scheduler_node(state: AgentState):
         "screenshot_paths": [],
         "audios_map": {}, 
         "images_map": {}, 
-        "is_approved": False, 
-        "user_feedback": None
+        "is_approved": False,
+        "user_feedback": None,
+
+        # Reset critic retry counts
+        "script_critic_retry_count": 0,
+        "image_critic_retry_count": 0,
+        "script_critic_feedback": None,
+        "image_critic_feedback": None,
+        "script_critic_failed_indices": None,
     }

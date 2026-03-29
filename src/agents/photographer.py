@@ -12,7 +12,8 @@ async def batch_photographer_node(state: AgentState):
     Output: photographer_storyboards (Updated with asset paths)
     """
     def sync_photographer():
-        storyboards = state.get("draft_storyboards", [])
+        # On retry (after image critic), use the updated storyboards with refined queries
+        storyboards = state.get("photographer_storyboards") or state.get("draft_storyboards", [])
         print(f"Photographer: Processing {len(storyboards)} storyboards...")
         
         api_key = os.environ.get("SERPAPI_API_KEY")
@@ -41,7 +42,17 @@ async def batch_photographer_node(state: AgentState):
                         "num": 3,
                         "tbs": "itp:photo"
                     }
-                    resp = requests.get("https://serpapi.com/search", params=params, timeout=15)
+                    resp = None
+                    for attempt in range(3):
+                        try:
+                            resp = requests.get("https://serpapi.com/search", params=params, timeout=30)
+                            break
+                        except requests.exceptions.Timeout:
+                            print(f"      -> SerpApi timeout (attempt {attempt+1}/3), retrying...")
+                    if resp is None:
+                        print(f"      -> SerpApi failed after 3 attempts.")
+                        updated_scenes.append(scene)
+                        continue
                     if resp.status_code == 200:
                         results = resp.json().get("images_results", [])
                         for result in results:

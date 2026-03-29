@@ -3,8 +3,8 @@ import operator
 from pydantic import BaseModel, Field
 
 class Scene(BaseModel):
-    id: int = Field(..., description="Scene ID (分镜序号)")
-    subtitle_text: str = Field(..., description="Spoken text (中文台词)")
+    id: int = Field(..., description="Scene ID")
+    subtitle_text: str = Field(..., description="Spoken text for this scene")
     
     # New image search field
     image_search_query: Optional[str] = Field(None, description="English search query for Google Images (e.g. 'Elon Musk speaking at conference').")
@@ -31,6 +31,10 @@ class AgentState(TypedDict):
     # Stage 2 Output: Initial scripts
     draft_storyboards: List[Storyboard] 
     
+    # Stage 3 Output: Parallel branch outputs
+    photographer_storyboards: List[Storyboard]
+    reporter_storyboards: List[Storyboard]
+
     # Stage 4/5 Output: Finalized for rendering
     ready_to_render_storyboards: List[Storyboard] 
     
@@ -61,3 +65,10 @@ class AgentState(TypedDict):
     user_feedback: Optional[str]
     is_approved: bool
     sentences: Optional[List[str]]
+
+    # Critic agent fields
+    script_critic_retry_count: int
+    image_critic_retry_count: int
+    script_critic_feedback: Optional[str]
+    image_critic_feedback: Optional[str]
+    script_critic_failed_indices: Optional[List[int]]

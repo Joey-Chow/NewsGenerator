@@ -14,23 +14,37 @@ async def batch_editor_node(state: AgentState):
     def sync_editor():
         all_articles = state.get("scraped_articles", [])
         user_feedback = state.get("user_feedback")
-        
-        # 1. Selection Phase: Pick which articles to process
-        if user_feedback and len(all_articles) > 0:
+        critic_feedback = state.get("script_critic_feedback")
+        failed_indices = state.get("script_critic_failed_indices")
+        existing_storyboards = state.get("draft_storyboards", [])
+
+        # Merge critic feedback into user_feedback so the same revision logic applies
+        if critic_feedback and not user_feedback:
+            user_feedback = f"[Auto-Critic Feedback] {critic_feedback}"
+
+        # --- Selective regeneration mode ---
+        # If the script critic flagged specific storyboards, only regenerate those
+        if failed_indices is not None and existing_storyboards:
+            print(f"Batch Editor: Selective mode — only regenerating failed storyboards at indices {failed_indices}")
+            print(f"  Keeping {len(existing_storyboards) - len(failed_indices)} approved storyboard(s) unchanged.")
+            articles = all_articles[:2]  # Use same article set
+        # --- Human feedback mode: full re-selection ---
+        elif user_feedback and len(all_articles) > 0:
+            failed_indices = None  # Reset — human feedback regenerates everything
             print(f"Batch Editor: LLM is dynamically selecting articles based on feedback: '{user_feedback}'")
             # Prepare list of titles
             title_list_str = "\n".join([f"[{i}] {a.get('title', 'Unknown Title')}" for i, a in enumerate(all_articles)])
-            
+
             selection_prompt = f"""
             The user rejected the previous draft and wants to change the news articles based on this feedback:
             "{user_feedback}"
-            
+
             Available scraped articles:
             {title_list_str}
-            
+
             Please select EXACTLY 2 articles from the list above that best match the user's new request.
             If the user's feedback is just about style (e.g. "make it funny") and doesn't dictate a topic change, just return the first 2 indices: [0, 1].
-            
+
             Return ONLY a JSON array of the 2 integer indices. Example: [2, 5]
             """
             gemini_key = os.environ.get("GEMINI_API_KEY")
@@ -53,10 +67,11 @@ async def batch_editor_node(state: AgentState):
             else:
                 articles = all_articles[:2]
         else:
-            # Default behavior
+            # Default behavior — first run
+            failed_indices = None
             articles = all_articles[:2]
-        
-        print(f"Batch Editor: Processing {len(articles)} articles...")
+
+        print(f"Batch Editor: Processing {len(failed_indices) if failed_indices is not None else len(articles)} article(s)...")
         
         gemini_key = os.environ.get("GEMINI_API_KEY")
         llm = None
@@ -128,50 +143,70 @@ async def batch_editor_node(state: AgentState):
            - Keir Starmer is the current Prime Minister of the United Kingdom.
         """ + feedback_instruction
 
-        generated_storyboards = []
+        # Determine which articles to regenerate
+        if failed_indices is not None:
+            indices_to_generate = failed_indices
+        else:
+            indices_to_generate = list(range(len(articles)))
 
-        for idx, article in enumerate(articles):
+        generated_storyboards = list(existing_storyboards) if failed_indices is not None else []
+
+        for idx in indices_to_generate:
+            if idx >= len(articles):
+                print(f"  - Skipping index {idx} (out of range)")
+                continue
+
+            article = articles[idx]
             url = article["url"]
             text = article["raw_news"]
             print(f"  - Editing Article {idx+1}/{len(articles)} (Source: {url[:30]}...)...")
-            
+
             messages = [
                 SystemMessage(content=prompt_template),
                 HumanMessage(content=f"Source URL: {url}\n\nContent:\n{text[:15000]}") # Truncate if too huge
             ]
-            
+
             try:
                 # Invocation
                 response = llm.invoke(messages)
                 content = response.content
-                
+
                 # Parsing
                 json_match = re.search(r'\{.*\}', content, re.DOTALL)
-                if json_match: 
+                if json_match:
                     content = json_match.group(0)
-                
+
                 data = json.loads(content)
                 if "scenes" not in data and "storyboard" in data:
                     data = data["storyboard"]
-                    
+
                 sb = Storyboard(**data)
-                generated_storyboards.append(sb)
-                
+
+                # In selective mode, replace in-place; otherwise append
+                if failed_indices is not None and idx < len(generated_storyboards):
+                    old_title = generated_storyboards[idx].title
+                    generated_storyboards[idx] = sb
+                    print(f"    -> Replaced storyboard {idx+1}: '{old_title}' → '{sb.title}'")
+                else:
+                    generated_storyboards.append(sb)
+                    print(f"    -> Generated Storyboard: {sb.title}")
+
                 # Save Debug Copy
                 os.makedirs("output/storyboard", exist_ok=True)
-                # Use index + 1 for filename consistency 1-based
                 with open(f"output/storyboard/storyboard_{idx+1}.json", "w", encoding='utf-8') as f:
                     f.write(sb.model_dump_json(indent=2))
-                    
-                print(f"    -> Generated Storyboard: {sb.title}")
 
             except Exception as e:
                 print(f"    -> Editor Failed for {url}: {e}")
-                # Don't append invalid content
+                # Don't replace — keep existing storyboard if in selective mode
 
         print(f"Batch Editor: Finished. {len(generated_storyboards)} drafts ready.")
-        
-        # Clear the user_feedback after processing so it doesn't loop indefinitely
-        return {"draft_storyboards": generated_storyboards, "user_feedback": None}
+
+        # Clear feedback fields after processing so they don't loop indefinitely
+        return {
+            "draft_storyboards": generated_storyboards,
+            "user_feedback": None,
+            "script_critic_failed_indices": None,
+        }
 
     return await asyncio.to_thread(sync_editor)

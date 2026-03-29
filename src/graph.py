@@ -11,6 +11,8 @@ from src.agents.concat import concat_node
 from src.agents.batch_renderer import batch_video_renderer_node
 from src.agents.youtuber import youtuber_node
 from src.agents.joiner import join_assets_node
+from src.agents.script_critic import script_critic_node
+from src.agents.image_critic import image_critic_node
 
 def build_graph(checkpointer=None):
     workflow = StateGraph(AgentState)
@@ -20,7 +22,9 @@ def build_graph(checkpointer=None):
     workflow.add_node("scraper", batch_scraper_node)
     workflow.add_node("editor", batch_editor_node)
     workflow.add_node("script_review", batch_human_script_review_node)
+    workflow.add_node("script_critic", script_critic_node)
     workflow.add_node("photographer", batch_photographer_node)
+    workflow.add_node("image_critic", image_critic_node)
     workflow.add_node("reporter", batch_reporter_node)
     workflow.add_node("renderer", batch_video_renderer_node)
     workflow.add_node("concat", concat_node)
@@ -34,9 +38,23 @@ def build_graph(checkpointer=None):
     workflow.add_edge("scheduler", "scraper")
     workflow.add_edge("scraper", "editor")
     
-    # Interrupt 1: Script Review
-    workflow.add_edge("editor", "script_review")
-    
+    # Editor -> Script Critic (automatic evaluation)
+    workflow.add_edge("editor", "script_critic")
+
+    # Script Critic -> conditional: loop back to editor OR proceed to human review
+    def route_after_script_critic(state: AgentState):
+        if state.get("script_critic_feedback"):
+            print("Routing: Script Critic FAILED. Looping back to Editor for revision.")
+            return "editor"
+        print("Routing: Script Critic PASSED. Proceeding to Human Review.")
+        return "script_review"
+
+    workflow.add_conditional_edges(
+        "script_critic",
+        route_after_script_critic,
+        {"editor": "editor", "script_review": "script_review"}
+    )
+
     # Conditional Edge for Script Review
     def route_after_review(state: AgentState):
         if state.get("user_feedback"):
@@ -56,7 +74,23 @@ def build_graph(checkpointer=None):
     )
     
     # Parallel Workflow Branch
-    workflow.add_edge("photographer", "join_assets")
+    # Photographer -> Image Critic (automatic evaluation)
+    workflow.add_edge("photographer", "image_critic")
+
+    # Image Critic -> conditional: loop back to photographer OR proceed to join
+    def route_after_image_critic(state: AgentState):
+        if state.get("image_critic_feedback"):
+            print("Routing: Image Critic FAILED. Looping back to Photographer for re-fetch.")
+            return "photographer"
+        print("Routing: Image Critic PASSED. Proceeding to Join Assets.")
+        return "join_assets"
+
+    workflow.add_conditional_edges(
+        "image_critic",
+        route_after_image_critic,
+        {"photographer": "photographer", "join_assets": "join_assets"}
+    )
+
     workflow.add_edge("reporter", "join_assets")
     
     workflow.add_edge("join_assets", "renderer")

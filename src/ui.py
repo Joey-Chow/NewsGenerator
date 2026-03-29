@@ -7,6 +7,7 @@ import json
 import contextlib
 import inspect
 from dotenv import load_dotenv
+from langgraph.types import Command
 from src.graph import build_graph
 
 load_dotenv()
@@ -16,7 +17,11 @@ class UIState:
     def __init__(self):
         self.logs = "--- Serious News Automation Dashboard Ready ---\n"
         from langgraph.checkpoint.memory import MemorySaver
-        self.app = build_graph(checkpointer=MemorySaver())
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+        serde = JsonPlusSerializer(
+            allowed_msgpack_modules={("src.state", "Storyboard")}
+        )
+        self.app = build_graph(checkpointer=MemorySaver(serde=serde))
         self.config = {"configurable": {"thread_id": "gradio_thread"}}
 
 ui_state = UIState()
@@ -178,7 +183,9 @@ def pipeline_generator(is_start=False, injected_state=None):
             if injected_state:
                 print(f"   -> Injecting state updates: {list(injected_state.keys())}")
                 ui_state.app.update_state(ui_state.config, injected_state)
-            current_input = None
+                current_input = Command(resume=injected_state)
+            else:
+                current_input = Command(resume=True)
             
         def pull_ui_state(force_hide_popup=False):
             news, sel_media, aud, img, video, yt_url = fetch_media_state()

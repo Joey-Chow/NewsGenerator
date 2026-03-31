@@ -73,9 +73,35 @@ def _parse_json(text: str) -> dict:
     return json.loads(text)
 
 
+MAX_IMAGE_BYTES = 4_500_000  # stay under Claude's 5MB limit
+
+
 def _encode_image(path: str) -> str:
+    """Read an image and return base64. Resizes if over MAX_IMAGE_BYTES."""
+    from PIL import Image
+    import io
+
     with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode()
+        data = f.read()
+
+    if len(data) <= MAX_IMAGE_BYTES:
+        return base64.b64encode(data).decode()
+
+    # Resize to fit under the limit
+    img = Image.open(io.BytesIO(data))
+    quality = 85
+    while quality >= 20:
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality)
+        if buf.tell() <= MAX_IMAGE_BYTES:
+            return base64.b64encode(buf.getvalue()).decode()
+        quality -= 15
+
+    # Last resort: scale down
+    img.thumbnail((1024, 1024))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=60)
+    return base64.b64encode(buf.getvalue()).decode()
 
 
 def score_script(storyboard: Storyboard, source_article: str) -> dict:

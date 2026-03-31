@@ -19,7 +19,6 @@ from langgraph.checkpoint.memory import MemorySaver
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.graph import build_graph
-from src.state import Storyboard
 from eval.score_outputs import score_full_run
 
 
@@ -69,7 +68,7 @@ async def run_pipeline(articles: list, version: str) -> dict:
 
     return {
         "version": version,
-        "storyboards": state.get("draft_storyboards", []),
+        "storyboards": state.get("ready_to_render_storyboards", []) or state.get("draft_storyboards", []),
         "elapsed_seconds": round(elapsed, 2),
         "state": state,
     }

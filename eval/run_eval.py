@@ -13,6 +13,9 @@ import json
 import time
 import argparse
 import asyncio
+from dotenv import load_dotenv
+
+load_dotenv()
 from datetime import datetime
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver

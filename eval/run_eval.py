@@ -5,6 +5,7 @@ Loads benchmark articles, runs only the script + image stages of the pipeline
 (skipping TTS, rendering, concatenation, and upload), then scores outputs.
 
 Usage:
+    python -m eval.run_eval --version baseline --articles eval/benchmark_articles.json
     python -m eval.run_eval --version advanced --articles eval/benchmark_articles.json
 """
 import os
@@ -25,54 +26,71 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.state import AgentState
 from src.agents.scraper import batch_scraper_node
 from src.agents.editor import batch_editor_node
-from src.agents.script_critic import script_critic_node
 from src.agents.photographer import batch_photographer_node
-from src.agents.image_critic import image_critic_node
 from eval.score_outputs import score_full_run
 
 
-def build_eval_graph(checkpointer=None):
-    """Build a trimmed pipeline for evaluation: editor + photographer only.
+def _try_import_critics():
+    """Import critic agents if available (advanced branch only)."""
+    try:
+        from src.agents.script_critic import script_critic_node
+        from src.agents.image_critic import image_critic_node
+        return script_critic_node, image_critic_node
+    except ImportError:
+        return None, None
 
-    Flow: scraper → editor → script_critic ⇄ editor (retry loop)
-          → photographer → image_critic ⇄ photographer (retry loop) → END
-    Skips: HITL review, TTS (reporter), join_assets, renderer, concat, youtuber.
+
+def build_eval_graph(version="baseline", checkpointer=None):
+    """Build an eval pipeline based on version.
+
+    Baseline:  scraper → editor → photographer → END
+    Advanced:  scraper → editor → script_critic ⇄ editor
+               → photographer → image_critic ⇄ photographer → END
     """
     workflow = StateGraph(AgentState)
 
     workflow.add_node("scraper", batch_scraper_node)
     workflow.add_node("editor", batch_editor_node)
-    workflow.add_node("script_critic", script_critic_node)
     workflow.add_node("photographer", batch_photographer_node)
-    workflow.add_node("image_critic", image_critic_node)
 
     workflow.set_entry_point("scraper")
     workflow.add_edge("scraper", "editor")
-    workflow.add_edge("editor", "script_critic")
 
-    def route_after_script_critic(state: AgentState):
-        if state.get("script_critic_feedback"):
-            return "editor"
-        return "photographer"
+    script_critic_node, image_critic_node = _try_import_critics()
 
-    workflow.add_conditional_edges(
-        "script_critic",
-        route_after_script_critic,
-        {"editor": "editor", "photographer": "photographer"},
-    )
+    if version == "advanced" and script_critic_node and image_critic_node:
+        workflow.add_node("script_critic", script_critic_node)
+        workflow.add_node("image_critic", image_critic_node)
 
-    workflow.add_edge("photographer", "image_critic")
+        workflow.add_edge("editor", "script_critic")
 
-    def route_after_image_critic(state: AgentState):
-        if state.get("image_critic_feedback"):
+        def route_after_script_critic(state: AgentState):
+            if state.get("script_critic_feedback"):
+                return "editor"
             return "photographer"
-        return END
 
-    workflow.add_conditional_edges(
-        "image_critic",
-        route_after_image_critic,
-        {"photographer": "photographer", END: END},
-    )
+        workflow.add_conditional_edges(
+            "script_critic",
+            route_after_script_critic,
+            {"editor": "editor", "photographer": "photographer"},
+        )
+
+        workflow.add_edge("photographer", "image_critic")
+
+        def route_after_image_critic(state: AgentState):
+            if state.get("image_critic_feedback"):
+                return "photographer"
+            return END
+
+        workflow.add_conditional_edges(
+            "image_critic",
+            route_after_image_critic,
+            {"photographer": "photographer", END: END},
+        )
+    else:
+        # Baseline: no critics
+        workflow.add_edge("editor", "photographer")
+        workflow.add_edge("photographer", END)
 
     return workflow.compile(checkpointer=checkpointer)
 
@@ -87,7 +105,7 @@ def load_benchmark(path: str) -> list:
 async def run_pipeline(articles: list, version: str) -> dict:
     """Run the eval pipeline with benchmark articles injected as scraped_articles."""
     checkpointer = MemorySaver()
-    app = build_eval_graph(checkpointer=checkpointer)
+    app = build_eval_graph(version=version, checkpointer=checkpointer)
 
     initial_state = {
         "news_urls": [a["url"] for a in articles],
@@ -112,20 +130,35 @@ async def run_pipeline(articles: list, version: str) -> dict:
 
     start_time = time.time()
 
+    last_state = {}
     async for event in app.astream(initial_state, config):
         for node_name, node_output in event.items():
             print(f"  [{version}] Node completed: {node_name}")
+            if isinstance(node_output, dict):
+                last_state.update(node_output)
 
     elapsed = time.time() - start_time
 
-    snapshot = app.get_state(config)
-    state = snapshot.values
+    storyboards = last_state.get("photographer_storyboards", []) or last_state.get("draft_storyboards", [])
+
+    # Fill in image paths from disk if checkpoint lost them
+    image_dir = os.path.abspath("output/assets_final")
+    for video_idx, sb in enumerate(storyboards):
+        video_id = video_idx + 1
+        for scene in sb.scenes:
+            if scene.final_asset_path and os.path.exists(scene.final_asset_path):
+                continue
+            for ext in [".jpg", ".jpeg", ".png", ".webp"]:
+                candidate = os.path.join(image_dir, f"scene_{video_id}_{scene.id}{ext}")
+                if os.path.exists(candidate):
+                    scene.final_asset_path = candidate
+                    break
 
     return {
         "version": version,
-        "storyboards": state.get("photographer_storyboards", []) or state.get("draft_storyboards", []),
+        "storyboards": storyboards,
         "elapsed_seconds": round(elapsed, 2),
-        "state": state,
+        "state": last_state,
     }
 
 

@@ -1,11 +1,10 @@
 # eval/score_outputs.py
 """
 LLM-as-Judge evaluation module.
-Scores pipeline outputs using Claude (Anthropic) as an independent judge for:
-  - Script quality (accuracy, coherence, engagement) with source grounding
-  - Image relevance (multimodal: actual image vs. scene narration)
+  - Script quality: Claude (accuracy, coherence, engagement) with source grounding
+  - Image relevance: GPT-4o (multimodal vision)
 
-Uses a different model provider than the generation pipeline (Gemini) to avoid
+Uses different model providers than the generation pipeline (Gemini) to avoid
 self-evaluation bias.
 """
 import os
@@ -15,6 +14,7 @@ import csv
 import base64
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from src.state import Storyboard
 
 
@@ -63,6 +63,17 @@ def _get_llm(temperature=0.2):
         model="claude-sonnet-4-20250514",
         temperature=temperature,
         anthropic_api_key=key,
+    )
+
+
+def _get_vision_llm(temperature=0.1):
+    key = os.environ.get("OPENAI_API_KEY")
+    if not key:
+        raise RuntimeError("OPENAI_API_KEY not set")
+    return ChatOpenAI(
+        model="gpt-4o",
+        temperature=temperature,
+        api_key=key,
     )
 
 
@@ -135,8 +146,8 @@ def score_script(storyboard: Storyboard, source_article: str) -> dict:
 
 
 def score_image(scene_text: str, image_path: str) -> dict:
-    """Score an image's relevance to its scene narration using Gemini Vision."""
-    llm = _get_llm(temperature=0.1)
+    """Score an image's relevance to its scene narration using GPT-4o Vision."""
+    llm = _get_vision_llm(temperature=0.1)
 
     image_b64 = _encode_image(image_path)
 

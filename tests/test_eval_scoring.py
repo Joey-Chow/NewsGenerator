@@ -80,7 +80,7 @@ def test_score_image_returns_relevance():
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = mock_response
 
-    with patch("eval.score_outputs._get_llm", return_value=mock_llm), \
+    with patch("eval.score_outputs._get_vision_llm", return_value=mock_llm), \
          patch("eval.score_outputs._encode_image", return_value="fake_base64"):
         result = score_image(
             scene_text="Experts warn of recession",

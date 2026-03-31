@@ -1,8 +1,8 @@
 # eval/run_eval.py
 """
 Evaluation runner.
-Loads benchmark articles, injects them into the pipeline (bypassing scraper),
-runs the graph, and saves outputs + scores.
+Loads benchmark articles, runs only the script + image stages of the pipeline
+(skipping TTS, rendering, concatenation, and upload), then scores outputs.
 
 Usage:
     python -m eval.run_eval --version advanced --articles eval/benchmark_articles.json
@@ -14,12 +14,64 @@ import time
 import argparse
 import asyncio
 from datetime import datetime
+from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.graph import build_graph
+from src.state import AgentState
+from src.agents.scraper import batch_scraper_node
+from src.agents.editor import batch_editor_node
+from src.agents.script_critic import script_critic_node
+from src.agents.photographer import batch_photographer_node
+from src.agents.image_critic import image_critic_node
 from eval.score_outputs import score_full_run
+
+
+def build_eval_graph(checkpointer=None):
+    """Build a trimmed pipeline for evaluation: editor + photographer only.
+
+    Flow: scraper → editor → script_critic ⇄ editor (retry loop)
+          → photographer → image_critic ⇄ photographer (retry loop) → END
+    Skips: HITL review, TTS (reporter), join_assets, renderer, concat, youtuber.
+    """
+    workflow = StateGraph(AgentState)
+
+    workflow.add_node("scraper", batch_scraper_node)
+    workflow.add_node("editor", batch_editor_node)
+    workflow.add_node("script_critic", script_critic_node)
+    workflow.add_node("photographer", batch_photographer_node)
+    workflow.add_node("image_critic", image_critic_node)
+
+    workflow.set_entry_point("scraper")
+    workflow.add_edge("scraper", "editor")
+    workflow.add_edge("editor", "script_critic")
+
+    def route_after_script_critic(state: AgentState):
+        if state.get("script_critic_feedback"):
+            return "editor"
+        return "photographer"
+
+    workflow.add_conditional_edges(
+        "script_critic",
+        route_after_script_critic,
+        {"editor": "editor", "photographer": "photographer"},
+    )
+
+    workflow.add_edge("photographer", "image_critic")
+
+    def route_after_image_critic(state: AgentState):
+        if state.get("image_critic_feedback"):
+            return "photographer"
+        return END
+
+    workflow.add_conditional_edges(
+        "image_critic",
+        route_after_image_critic,
+        {"photographer": "photographer", END: END},
+    )
+
+    return workflow.compile(checkpointer=checkpointer)
 
 
 def load_benchmark(path: str) -> list:
@@ -30,9 +82,9 @@ def load_benchmark(path: str) -> list:
 
 
 async def run_pipeline(articles: list, version: str) -> dict:
-    """Run the pipeline with benchmark articles injected as scraped_articles."""
+    """Run the eval pipeline with benchmark articles injected as scraped_articles."""
     checkpointer = MemorySaver()
-    app = build_graph(checkpointer=checkpointer)
+    app = build_eval_graph(checkpointer=checkpointer)
 
     initial_state = {
         "news_urls": [a["url"] for a in articles],
@@ -68,7 +120,7 @@ async def run_pipeline(articles: list, version: str) -> dict:
 
     return {
         "version": version,
-        "storyboards": state.get("ready_to_render_storyboards", []) or state.get("draft_storyboards", []),
+        "storyboards": state.get("photographer_storyboards", []) or state.get("draft_storyboards", []),
         "elapsed_seconds": round(elapsed, 2),
         "state": state,
     }

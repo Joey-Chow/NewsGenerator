@@ -70,6 +70,11 @@ async def batch_scraper_node(state: AgentState):
     """
     Globe and Mail RSS Scraper (Async wrapper)
     """
+    # Skip scraping if articles were pre-injected (e.g., by eval runner)
+    if state.get("scraped_articles"):
+        print("Scraper: Articles already present in state, skipping RSS fetch.")
+        return {}
+
     def sync_scraper():
         print("Scraper: Fetching articles...")
         rss_articles = get_articles_from_rss(TGM_RSS_FEEDS, limit_per_feed=3)

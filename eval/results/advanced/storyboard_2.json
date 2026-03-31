@@ -1,0 +1,64 @@
+{
+  "title": "Italian Museum Heist: Renoir, Cézanne, and Matisse Paintings Stolen",
+  "scenes": [
+    {
+      "id": 1,
+      "subtitle_text": "According to Reuters, thieves have stolen three paintings by Renoir, Cézanne, and Matisse from a museum near Parma, Italy",
+      "image_search_query": "Magnani Rocca Foundation exterior real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_2_1.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 2,
+      "subtitle_text": "The paintings, worth millions of euros, were taken from the Magnani Rocca Foundation after the thieves forced open the entrance on March 22nd",
+      "image_search_query": "Magnani Rocca Foundation entrance real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_2_2.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 3,
+      "subtitle_text": "The stolen works include Renoir's 'Fish,' Cézanne's 'Still Life with Cherries,' and Matisse's 'Odalisque on the Terrace'",
+      "image_search_query": "pierre auguste renoir fish painting real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_2_3.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 4,
+      "subtitle_text": "Local media reports suggest the thieves completed the heist in under three minutes, escaping through the museum gardens",
+      "image_search_query": "Magnani Rocca Foundation garden real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_2_4.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 5,
+      "subtitle_text": "The museum suspects a well-organized gang was responsible, as the alarm system was triggered during the theft",
+      "image_search_query": "museum alarm system real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_2_5.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 6,
+      "subtitle_text": "This incident follows a series of high-profile art heists across Europe, raising concerns about museum security",
+      "image_search_query": "museum security real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_2_6.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 7,
+      "subtitle_text": "Art expert Claudio Strinati suggests the theft may be followed by a ransom request, a common tactic in art heists",
+      "image_search_query": "art expert examining painting press photo",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_2_7.jpg",
+      "audio_path": null,
+      "duration": null
+    }
+  ],
+  "feedback": null,
+  "is_approved": false,
+  "sentences": null
+}

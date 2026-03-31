@@ -1,0 +1,72 @@
+{
+  "title": "The Strait of Hormuz: An Ancient Chokepoint in a Modern World",
+  "scenes": [
+    {
+      "id": 1,
+      "subtitle_text": "The Strait of Hormuz has become a critical chokepoint, driving up petroleum and natural gas prices worldwide, according to the Globe and Mail",
+      "image_search_query": "oil tanker passing through narrow strait real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_1_1.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 2,
+      "subtitle_text": "This disruption threatens global harvests by cutting off fertilizer supplies and jeopardizes the production of essential medicines and semiconductors",
+      "image_search_query": "fertilizer shortage global harvest real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_1_2.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 3,
+      "subtitle_text": "Historically, the Strait's economic power has been recognized for millennia, with Marco Polo calling it 'the gem in the ring of the world'",
+      "image_search_query": "Marco Polo silk road travel high quality photo",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_1_3.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 4,
+      "subtitle_text": "The vulnerability to this strategy highlights how deeply rooted our modern technology remains in ancient patterns of resource movement through these sea channels",
+      "image_search_query": "ancient trade routes map silk road",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_1_4.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 5,
+      "subtitle_text": "Throughout history, various empires, from the Sassanids to the Portuguese, have sought to control the Strait to exert economic and political influence",
+      "image_search_query": "ancient persian empire sassanid soldiers high quality photo",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_1_5.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 6,
+      "subtitle_text": "Trump's recent military actions in Iran mirror historical attempts to control the region, but underestimate the Ayatollahs' willingness to weaponize the Strait",
+      "image_search_query": "Donald Trump Iran Strait of Hormuz press photo",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_1_6.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 7,
+      "subtitle_text": "The current crisis exposes a fundamental weakness in the global economy: our dependence on fossil fuels and traditional trade routes",
+      "image_search_query": "oil refinery industrial landscape real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_1_7.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 8,
+      "subtitle_text": "This revival of ancient economic warfare may finally incentivize a shift toward a more modern, resilient energy economy and diversified trade patterns",
+      "image_search_query": "renewable energy wind turbines solar panels real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator/output/assets_final/scene_1_8.jpg",
+      "audio_path": null,
+      "duration": null
+    }
+  ],
+  "feedback": null,
+  "is_approved": false,
+  "sentences": null
+}

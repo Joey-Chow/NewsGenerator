@@ -10,7 +10,6 @@ import re
 import json
 import csv
 import base64
-from datetime import datetime
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from src.state import Storyboard
@@ -164,9 +163,19 @@ def score_full_run(storyboards: list, articles: list, output_csv: str):
             "num_images_found": len(valid_scores),
         })
 
-    os.makedirs(os.path.dirname(output_csv), exist_ok=True)
+    if not storyboards:
+        return rows
+
+    fieldnames = [
+        "storyboard_idx", "title", "accuracy", "coherence", "engagement",
+        "script_reasoning", "avg_image_relevance", "image_scores",
+        "num_scenes", "num_images_found",
+    ]
+    dirname = os.path.dirname(output_csv)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
     with open(output_csv, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 

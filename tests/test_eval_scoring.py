@@ -1,5 +1,4 @@
 # tests/test_eval_scoring.py
-import pytest
 import json
 from unittest.mock import patch, MagicMock
 from src.state import Storyboard, Scene
@@ -20,8 +19,7 @@ def _make_storyboard():
     )
 
 
-@pytest.mark.asyncio
-async def test_score_script_returns_three_dimensions():
+def test_score_script_returns_three_dimensions():
     """score_script should return accuracy, coherence, engagement scores (1-5)."""
     from eval.score_outputs import score_script
 
@@ -44,8 +42,7 @@ async def test_score_script_returns_three_dimensions():
         assert "reasoning" in result
 
 
-@pytest.mark.asyncio
-async def test_score_script_with_source_grounding():
+def test_score_script_with_source_grounding():
     """score_script should include the source article for fact-checking."""
     from eval.score_outputs import score_script
 

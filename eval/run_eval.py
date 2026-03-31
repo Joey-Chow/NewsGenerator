@@ -130,20 +130,35 @@ async def run_pipeline(articles: list, version: str) -> dict:
 
     start_time = time.time()
 
+    last_state = {}
     async for event in app.astream(initial_state, config):
         for node_name, node_output in event.items():
             print(f"  [{version}] Node completed: {node_name}")
+            if isinstance(node_output, dict):
+                last_state.update(node_output)
 
     elapsed = time.time() - start_time
 
-    snapshot = app.get_state(config)
-    state = snapshot.values
+    storyboards = last_state.get("photographer_storyboards", []) or last_state.get("draft_storyboards", [])
+
+    # Fill in image paths from disk if checkpoint lost them
+    image_dir = os.path.abspath("output/assets_final")
+    for video_idx, sb in enumerate(storyboards):
+        video_id = video_idx + 1
+        for scene in sb.scenes:
+            if scene.final_asset_path and os.path.exists(scene.final_asset_path):
+                continue
+            for ext in [".jpg", ".jpeg", ".png", ".webp"]:
+                candidate = os.path.join(image_dir, f"scene_{video_id}_{scene.id}{ext}")
+                if os.path.exists(candidate):
+                    scene.final_asset_path = candidate
+                    break
 
     return {
         "version": version,
-        "storyboards": state.get("photographer_storyboards", []) or state.get("draft_storyboards", []),
+        "storyboards": storyboards,
         "elapsed_seconds": round(elapsed, 2),
-        "state": state,
+        "state": last_state,
     }
 
 

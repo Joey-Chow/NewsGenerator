@@ -83,10 +83,13 @@ def save_results(result: dict, articles: list, output_dir: str):
         with open(path, "w") as f:
             f.write(sb.model_dump_json(indent=2))
 
+    state = result.get("state", {})
     meta = {
         "version": result["version"],
         "elapsed_seconds": result["elapsed_seconds"],
         "num_storyboards": len(result["storyboards"]),
+        "script_critic_retry_count": state.get("script_critic_retry_count", 0),
+        "image_critic_retry_count": state.get("image_critic_retry_count", 0),
         "timestamp": datetime.now().isoformat(),
     }
     with open(os.path.join(output_dir, "metadata.json"), "w") as f:

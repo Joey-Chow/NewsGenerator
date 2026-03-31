@@ -64,7 +64,7 @@ def _get_llm(temperature=0.2):
 
 
 def _parse_json(text: str) -> dict:
-    match = re.search(r'\{.*\}', text, re.DOTALL)
+    match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
     if match:
         text = match.group(0)
     return json.loads(text)

@@ -1,9 +1,12 @@
 # eval/score_outputs.py
 """
 LLM-as-Judge evaluation module.
-Scores pipeline outputs using Gemini for:
+Scores pipeline outputs using Claude (Anthropic) as an independent judge for:
   - Script quality (accuracy, coherence, engagement) with source grounding
   - Image relevance (multimodal: actual image vs. scene narration)
+
+Uses a different model provider than the generation pipeline (Gemini) to avoid
+self-evaluation bias.
 """
 import os
 import re
@@ -11,7 +14,7 @@ import json
 import csv
 import base64
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_anthropic import ChatAnthropic
 from src.state import Storyboard
 
 
@@ -53,13 +56,13 @@ Return ONLY valid JSON:
 
 
 def _get_llm(temperature=0.2):
-    key = os.environ.get("GEMINI_API_KEY")
+    key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
-        raise RuntimeError("GEMINI_API_KEY not set")
-    return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
+    return ChatAnthropic(
+        model="claude-sonnet-4-20250514",
         temperature=temperature,
-        google_api_key=key,
+        anthropic_api_key=key,
     )
 
 

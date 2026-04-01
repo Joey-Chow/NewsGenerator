@@ -77,21 +77,25 @@ def build_graph(checkpointer=None):
     # Photographer -> Image Critic (automatic evaluation)
     workflow.add_edge("photographer", "image_critic")
 
-    # Image Critic -> conditional: loop back to photographer OR proceed to join
+    # Gate node: signals that the photographer branch is done
+    workflow.add_node("photographer_done", lambda state: state)
+
+    # Image Critic -> conditional: loop back to photographer OR proceed through gate
     def route_after_image_critic(state: AgentState):
         if state.get("image_critic_feedback"):
             print("Routing: Image Critic FAILED. Looping back to Photographer for re-fetch.")
             return "photographer"
         print("Routing: Image Critic PASSED. Proceeding to Join Assets.")
-        return "join_assets"
+        return "photographer_done"
 
     workflow.add_conditional_edges(
         "image_critic",
         route_after_image_critic,
-        {"photographer": "photographer", "join_assets": "join_assets"}
+        {"photographer": "photographer", "photographer_done": "photographer_done"}
     )
 
-    workflow.add_edge("reporter", "join_assets")
+    # Barrier: join_assets waits for BOTH branches to complete
+    workflow.add_edge(["photographer_done", "reporter"], "join_assets")
     
     workflow.add_edge("join_assets", "renderer")
     workflow.add_edge("renderer", "concat")

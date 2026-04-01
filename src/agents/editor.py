@@ -85,11 +85,14 @@ async def batch_editor_node(state: AgentState):
             
         feedback_instruction = ""
         if user_feedback:
-            print(f"Batch Editor: Applying Global User Feedback: {user_feedback}")
+            if critic_feedback:
+                print(f"Batch Editor: Applying critic feedback (details shown above by Script Critic).")
+            else:
+                print(f"Batch Editor: Applying user feedback: {user_feedback}")
             feedback_instruction = f"\n\nCRITICAL USER FEEDBACK FOR REVISION:\nThe user rejected the previous draft and requested the following changes:\n\"{user_feedback}\"\nYou MUST strictly follow this feedback when generating the new storyboard!"
 
-        prompt_template = """
-        You are a professional News Editor and Director. 
+        base_prompt = """
+        You are a professional News Editor and Director.
         Your task is to transform the provided news article into a video storyboard (JSON format).
 
         Input: A news article text.
@@ -99,7 +102,7 @@ async def batch_editor_node(state: AgentState):
           "scenes": [
             {
               "id": 1,
-              "subtitle_text": "First sentence of the script...", 
+              "subtitle_text": "First sentence of the script...",
               "image_search_query": "English search query for Google Images"
             },
             ...
@@ -110,30 +113,30 @@ async def batch_editor_node(state: AgentState):
         1. **Script (subtitle_text)**:
            - Language: English.
            - Tone: Professional, engaging, and authoritative.
-           - **Narrative Flow**: Ensure logical transitions between scenes. Avoid jumpy or fragmented sentences. 
+           - **Narrative Flow**: Ensure logical transitions between scenes. Avoid jumpy or fragmented sentences.
            - **Structure**:
              - Scene 1: Hook & Source citation (e.g. "According to Reuters, a major event occurred today...").
              - Middle Scenes: Explain the 'Why' and 'How'. Connect the facts into a story.
              - Final Scene: Implication or future outlook.
            - Max 5-8 scenes total.
-           - Each scene is one spoken sentence. 
+           - Each scene is one spoken sentence.
            - NO trailing punctuation (strip '.').
-        
+
         2. **Visuals**:
            - **image_search_query**: SPECIFIC English search query for Google Images.
              - **Focus**: Identify the core SUBJECT and ACTION in the current sentence.
-             - **Ignore Citations**: IGNORE phrases like "According to [Source]", "Reported by", "As stated by". 
+             - **Ignore Citations**: IGNORE phrases like "According to [Source]", "Reported by", "As stated by".
                - *Example*: If text is "WSJ reports retail sales rose", query should be "people shopping retail mall", NOT "WSJ logo" or "news anchor".
              - **Strict Constraint**: AVOID "news anchor", "news studio", "broadcasting room", "newsroom", "TV presenter" or "reporter".
              - **Negative Constraints**: AVOID charts, diagrams, vectors, generic icons, text slides.
              - **Keywords**: Use terms like "real life photography", "press photo", "high quality photo".
              - Ensure it is a valid search term.
-           
+
         3. **General**:
            - Return ONLY valid JSON.
 
         4. **CRITICAL GOAL**
-           - Create a COHERENT, NARRATIVE-DRIVEN story, not just a list of facts. 
+           - Create a COHERENT, NARRATIVE-DRIVEN story, not just a list of facts.
            - The script should flow smoothly from one sentence to the next like a documentary or a feature news segment.
 
         5. **CRITICAL FACTUAL CORRECTIONS**
@@ -160,6 +163,30 @@ async def batch_editor_node(state: AgentState):
             url = article["url"]
             text = article["raw_news"]
             print(f"  - Editing Article {idx+1}/{len(articles)} (Source: {url[:30]}...)...")
+
+            # Build revision context: include previous draft + critic feedback
+            revision_block = ""
+            if critic_feedback and failed_indices is not None and idx < len(existing_storyboards):
+                prev_sb = existing_storyboards[idx]
+                prev_scenes = "\n".join(
+                    [f"  Scene {s.id}: {s.subtitle_text}" for s in prev_sb.scenes]
+                )
+                revision_block = f"""
+
+=== PREVIOUS DRAFT (REJECTED) ===
+Title: {prev_sb.title}
+{prev_scenes}
+
+=== CRITIC FEEDBACK — YOU MUST FIX THESE ISSUES ===
+{critic_feedback}
+
+INSTRUCTIONS: Revise the storyboard above to fix the specific issues listed.
+Keep scenes that were NOT flagged. Only rewrite the scenes that the critic identified as problematic.
+Return the COMPLETE revised storyboard (all scenes, not just the changed ones).
+"""
+                print(f"    -> Revision mode: including previous draft + scene-level feedback")
+
+            prompt_template = base_prompt + revision_block
 
             messages = [
                 SystemMessage(content=prompt_template),

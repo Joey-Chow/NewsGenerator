@@ -13,7 +13,6 @@ import json
 import csv
 import base64
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from src.state import Storyboard
 
@@ -28,12 +27,22 @@ Evaluate on three dimensions:
 - coherence (1-5): Do scenes flow logically? Is there a clear narrative arc (hook -> body -> outlook)?
 - engagement (1-5): Is the language compelling and viewer-appropriate for a news broadcast?
 
+Scoring calibration (apply consistently across all scripts):
+- 5: Exceptional. Publishable as-is with no changes needed.
+- 4: Good and broadcast-ready. Minor imperfections that would not hurt viewers.
+     This is the expected score for a competent, professional script.
+- 3: Acceptable but has a clear, specific problem (one factual error, weak opening, etc.).
+- 2: Multiple problems that would noticeably hurt the viewer experience.
+- 1: Fundamentally broken — fabricated claims, incoherent narrative, or no engagement.
+
+Do NOT score 3 or below unless you can point to a specific, concrete problem in your reasoning.
+
 Return ONLY valid JSON:
 {
   "accuracy": <int 1-5>,
   "coherence": <int 1-5>,
   "engagement": <int 1-5>,
-  "reasoning": "<2-3 sentences explaining the scores>"
+  "reasoning": "<2-3 sentences explaining the scores, citing specific evidence from the script>"
 }
 """
 
@@ -55,25 +64,31 @@ Return ONLY valid JSON:
 """
 
 
-def _get_llm(temperature=0.2):
-    key = os.environ.get("ANTHROPIC_API_KEY")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+def _openrouter_key():
+    key = os.environ.get("OPENROUTER_API_KEY")
     if not key:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
-    return ChatAnthropic(
-        model="claude-sonnet-4-20250514",
+        raise RuntimeError("OPENROUTER_API_KEY not set")
+    return key
+
+
+def _get_llm(temperature=0.2):
+    return ChatOpenAI(
+        model="anthropic/claude-sonnet-4-5",
         temperature=temperature,
-        anthropic_api_key=key,
+        api_key=_openrouter_key(),
+        base_url=OPENROUTER_BASE_URL,
     )
 
 
 def _get_vision_llm(temperature=0.1):
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY not set")
     return ChatOpenAI(
-        model="gpt-4o",
+        model="openai/gpt-4o",
         temperature=temperature,
-        api_key=key,
+        api_key=_openrouter_key(),
+        base_url=OPENROUTER_BASE_URL,
     )
 
 
@@ -95,11 +110,14 @@ def _encode_image(path: str) -> str:
     with open(path, "rb") as f:
         data = f.read()
 
-    if len(data) <= MAX_IMAGE_BYTES:
+    # Check if it's a standard JPEG/PNG that's small enough
+    if len(data) <= MAX_IMAGE_BYTES and path.lower().endswith((".jpg", ".jpeg", ".png")):
         return base64.b64encode(data).decode()
 
     # Resize to fit under the limit
     img = Image.open(io.BytesIO(data))
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
     quality = 85
     while quality >= 20:
         buf = io.BytesIO()
@@ -174,6 +192,10 @@ def score_full_run(storyboards: list, articles: list, output_csv: str):
 
     for idx, sb in enumerate(storyboards):
         source = articles[idx]["raw_news"] if idx < len(articles) else ""
+        source_title = articles[idx].get("title", "Unknown") if idx < len(articles) else "N/A"
+
+        print(f"\nScoring storyboard {idx}: '{sb.title}'")
+        print(f"  Against source article: '{source_title}'")
 
         # Script scoring
         script_scores = score_script(sb, source)

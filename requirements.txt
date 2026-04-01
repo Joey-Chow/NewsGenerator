@@ -2,7 +2,7 @@ langgraph
 langchain
 langchain-core
 langchain-google-genai
-langchain-anthropic
+langchain-openai
 playwright
 pydantic
 python-dotenv

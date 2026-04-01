@@ -9,6 +9,14 @@ from src.state import AgentState
 MAX_RETRIES = 2
 PASS_THRESHOLD = 4.0
 
+# Weighted scoring: accuracy is most critical for news, engagement least
+# Weights: accuracy=2, coherence=1.5, engagement=1  (sum=4.5)
+# A script scoring 4/4/4 still yields exactly 4.0 — threshold stays unchanged
+_W_ACCURACY = 2.0
+_W_COHERENCE = 1.5
+_W_ENGAGEMENT = 1.0
+_W_SUM = _W_ACCURACY + _W_COHERENCE + _W_ENGAGEMENT
+
 CRITIC_SYSTEM_PROMPT = """You are a professional news script quality critic. You will be given:
 1. The ORIGINAL SOURCE ARTICLE that the storyboard was generated from.
 2. A news video STORYBOARD (title + scenes with spoken subtitles).
@@ -180,16 +188,20 @@ async def script_critic_node(state: AgentState):
                 overall_critique = result.get("overall_critique", "")
                 scene_feedback = result.get("scene_feedback", [])
 
-                avg = (accuracy + coherence + engagement) / 3.0
-                passed = avg >= PASS_THRESHOLD
+                weighted = (
+                    accuracy * _W_ACCURACY +
+                    coherence * _W_COHERENCE +
+                    engagement * _W_ENGAGEMENT
+                ) / _W_SUM
+                passed = weighted >= PASS_THRESHOLD
                 status = "PASS" if passed else "FAIL"
 
-                all_scores.append(avg)
+                all_scores.append(weighted)
 
-                print(f"    Accuracy:   {accuracy}/5")
-                print(f"    Coherence:  {coherence}/5")
-                print(f"    Engagement: {engagement}/5")
-                print(f"    Average:    {avg:.2f}  →  {status}")
+                print(f"    Accuracy:   {accuracy}/5  (weight ×{_W_ACCURACY})")
+                print(f"    Coherence:  {coherence}/5  (weight ×{_W_COHERENCE})")
+                print(f"    Engagement: {engagement}/5  (weight ×{_W_ENGAGEMENT})")
+                print(f"    Weighted:   {weighted:.2f}  →  {status}")
 
                 if not passed:
                     print(f"    Critique:   {overall_critique}")

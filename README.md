@@ -1,130 +1,235 @@
-# 🗞️ NewsGenerator: Automated News-to-Video Pipeline
+# NewsGenerator: Automated News-to-Video Pipeline
 
-NewsGenerator is a powerful automation system designed to transform news articles from various URLs into high-quality, professional-looking news videos. It leverages Large Language Models (LLMs) for script generation, LangGraph for workflow orchestration, and Remotion for programmatic video rendering.
+NewsGenerator is an AI-powered system that transforms news articles into professional news videos. It uses LangGraph for workflow orchestration, Google Gemini for script generation and critique, Azure TTS for voiceover, and Remotion for video rendering.
 
-## 🚀 Key Features
+This repository contains the **advanced version** of the pipeline (`critic-agent` branch), which adds two critic agents and an LLM-as-judge evaluation framework on top of the baseline pipeline.
 
-- **Multi-Source Scraping**: Automatically extracts content from a list of URLs (The Globe and Mail, etc.).
-- **Global English Support**: Full pipeline conversion to English, including LLM script generation and metadata.
-- **Azure TTS**: High-quality English voiceover using Azure's `en-US-AndrewMultilingualNeural` voice.
-- **AI-Powered Editorial**: Uses LLMs to refine news content, write scripts (in English), and generate visual instructions (storyboards).
-- **Human-in-the-Loop (HITL)**: Provides three strategic manual review points to ensure quality.
-- **Automated Photographer**: Automatically searches and downloads images based on the generated storyboard.
-- **Interactive UI**: Gradio-based dashboard for one-click generation and step-by-step testing.
+---
 
-## 🏗️ Architecture & Workflow
+## Branch Structure
 
-The system is built as a **StateGraph** using LangGraph, ensuring a robust and resumable workflow.
+| Branch | Description |
+|--------|-------------|
+| `critic-agent` | **Advanced** — full pipeline with critic agents, HITL, and evaluation framework (this branch) |
+| `main` (`baseline`) | Frozen baseline — simple pipeline, no critics, no HITL. Used as control group for evaluation |
 
-```mermaid
-graph TD
-    S[Scheduler] --> B[Batch Scraper]
-    B --> BS["⏸️ Scraper Review (Manual)"]
-    BS --> E[Batch Editor]
-    E --> SR["⏸️ Script Review (Manual)"]
-    SR --> P[Batch Photographer]
-    P --> AI["⏸️ Asset Ingest (Manual)"]
-    AI --> R[Batch Reporter]
-    R --> BR[Batch Renderer]
-    BR --> C[Concat]
-    C --> Y[Youtuber]
-    Y --> END((End))
+---
+
+## Key Features
+
+- **Dual Critic Agents**: A Script Critic evaluates generated storyboards for accuracy, coherence, and engagement before human review. An Image Critic (multimodal) checks image-scene relevance after the photographer runs. Both loop back to their respective agents on failure (max 2 retries).
+- **Weighted Scoring**: Accuracy is weighted 2×, coherence 1.5×, engagement 1× — reflecting that factual correctness is most critical for news content.
+- **Human-in-the-Loop (HITL)**: Manual script review gate after the script critic approves. Human feedback loops back to the editor.
+- **Parallel Execution**: After human script approval, the Photographer and Reporter (TTS) run in parallel and join at the Renderer.
+- **LLM-as-Judge Evaluation**: Separate evaluation pipeline using Claude (via OpenRouter) for script scoring and GPT-4o for image relevance scoring — different providers than the generation model (Gemini) to avoid self-evaluation bias.
+- **Benchmark Dataset**: 5 fixed articles in `eval/benchmark_articles.json` for reproducible baseline vs. advanced comparison.
+
+---
+
+## Pipeline Architecture
+
+```
+RSS Feed
+   │
+   ▼
+Scheduler ──► Scraper ──► Editor ──► Script Critic
+                                          │
+                              ┌───────────┴───────────┐
+                              │ FAIL (retry ≤ 2)      │ PASS
+                              └──────► Editor         ▼
+                                              Human Script Review
+                                                      │
+                                          ┌───────────┴─────────────┐
+                                          │ Feedback                │ Approved
+                                          └──────► Editor    ┌──────┴──────┐
+                                                             ▼             ▼
+                                                       Photographer    Reporter (TTS)
+                                                             │
+                                                       Image Critic
+                                                             │
+                                              ┌─────────────┴─────────────┐
+                                              │ FAIL (retry ≤ 2)          │ PASS
+                                              └──────► Photographer       ▼
+                                                                    Join Assets
+                                                                          │
+                                                                          ▼
+                                                                      Renderer
+                                                                          │
+                                                                          ▼
+                                                                        Concat
+                                                                          │
+                                                                          ▼
+                                                                       Youtuber
 ```
 
-### Core Components
+---
 
-- **`run.py`**: The main entry point. Automatically fetches news via RSS and manages the workflow.
-- **`src/graph.py`**: Defines the LangGraph workflow logic, checkpointers, and nodes.
-- **`src/agents/`**: Contains specialized agents:
-  - `scraper.py`, `editor.py`: Content ingestion and script generation.
-  - `ingest.py`: Manual review node for asset verification and storyboard reloading.
-  - `youtuber.py`: Generates YouTube metadata (titles, chapters, desc).
-- **`remotion_project/`**: The React-based video engine.
+## Critic Agent Details
 
-## 🛠️ Prerequisites
+### Script Critic (`src/agents/script_critic.py`)
+- **Model**: Gemini 2.0 Flash
+- **Trigger**: Automatically after Editor generates storyboards
+- **Evaluates**: Each storyboard against its source article
+- **Dimensions**: Accuracy (weight ×2), Coherence (weight ×1.5), Engagement (weight ×1)
+- **Pass threshold**: Weighted average ≥ 4.0
+- **On fail**: Returns scene-level feedback with concrete rewrite suggestions → loops to Editor
+- **Max retries**: 2 (force-passes after to prevent infinite loops)
 
-- **Python 3.10+**
-- **Node.js 18+ & npm**
-- **API Keys**: Required in a `.env` file (OpenAI, Google GenAI, etc.).
-- **Playwright**: For web scraping.
+### Image Critic (`src/agents/image_critic.py`)
+- **Model**: Gemini 2.0 Flash (Vision)
+- **Trigger**: Automatically after Photographer fetches images
+- **Evaluates**: Each (scene narration, image) pair for visual relevance
+- **Fallback**: Text-only query evaluation when images are unavailable
+- **On fail**: Updates `image_search_query` on failed scenes → loops to Photographer
+- **Max retries**: 2
 
-## 📦 Installation
+---
 
-1.  **Clone the repository** (or navigate to the directory).
-2.  **Setup Python Environment**:
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate
-    pip install -r requirements.txt
-    playwright install
-    ```
-3.  **Setup Rendering Engine**:
-    ```bash
-    cd remotion_project
-    npm install
-    ```
-4.  **Configure Environment**:
-    Create a `.env` file in the root directory and add your API keys:
-    ```env
-    OPENAI_API_KEY=your_key_here
-    GOOGLE_API_KEY=your_key_here
-    # ... other keys
-    ```
+## Evaluation Framework
 
-## 🎮 Usage
+Located in `eval/`. Runs both pipeline versions on the same 5 benchmark articles and scores outputs with independent LLM judges.
 
-### Method A: Interactive Gradio UI (Recommended)
+### Files
 
-This provides a visual dashboard to run the pipeline or test individual steps.
+| File | Purpose |
+|------|---------|
+| `eval/benchmark_articles.json` | 5 fixed scraped articles for reproducible evaluation |
+| `eval/fetch_benchmark.py` | Script to refresh benchmark articles from live RSS |
+| `eval/run_eval.py` | Runs the pipeline on benchmark articles, saves outputs to `eval/results/` |
+| `eval/score_outputs.py` | LLM-as-judge scoring — Claude for scripts, GPT-4o for images |
+
+### Running Evaluation
 
 ```bash
+# Score a completed pipeline run
+python -m eval.score_outputs
+
+# Full evaluation run (injects benchmark articles, runs pipeline, scores)
+python -m eval.run_eval --version advanced   # or --version baseline
+```
+
+Results are saved to `eval/results/advanced/` or `eval/results/baseline/` as CSV.
+
+### Evaluation Judges
+
+| Dimension | Judge Model | Provider | Metrics |
+|-----------|------------|---------|---------|
+| Script quality | `claude-sonnet-4-5` | OpenRouter | accuracy, coherence, engagement (1–5) |
+| Image relevance | `gpt-4o` | OpenRouter | relevance (1–5) |
+
+Using different providers than the generation model (Gemini) avoids self-evaluation bias.
+
+---
+
+## Prerequisites
+
+- Python 3.10+
+- Node.js 18+ & npm
+- FFmpeg
+- Playwright
+
+---
+
+## Installation
+
+```bash
+# 1. Python environment
+python -m venv .venv
 source .venv/bin/activate
-python3 app.py
+pip install -r requirements.txt
+playwright install
+
+# 2. Remotion rendering engine
+cd remotion_project
+npm install
+cd ..
 ```
 
-Open the provided local URL (usually `http://127.0.0.1:7860`) in your browser.
+---
 
-### Method B: Console Execution (Manual/Batch)
+## Configuration
 
-1.  **Configure URLs**: Open `run.py` or use the RSS feeds configured in `src/agents/scraper.py`.
-2.  **Start the System**:
-    ```bash
-    python run.py
-    ```
-3.  **Interact with the Workflow**: The terminal will pause at several points (Scraper, Script, and Asset review). Follow the instructions in the console to check/edit files in `output/` and press **ENTER** to proceed.
+Create a `.env` file in the project root:
 
-### Method C: LangGraph Studio (Visual Debugging)
+```env
+# Generation
+GEMINI_API_KEY=your_key_here
 
-For a fully interactive, visual way to run and debug the workflow:
+# Image search
+SERPAPI_KEY=your_key_here
 
-1.  **Install requirements**:
-    ```bash
-    pip install "langgraph-cli[all]"
-    ```
-2.  **Start the Dev Server**:
-    In the project root, run:
-    ```bash
-    source .venv/bin/activate
-    langgraph dev
-    ```
-3.  **Open in Browser**:
-    Follow the printed link (e.g., `https://smith.langchain.com/studio/...`) to see the node graph. You can start the pipeline from any node, view state changes, and handle interrupts visually.
+# Text-to-speech
+AZURE_SPEECH_KEY=your_key_here
+AZURE_SPEECH_REGION=your_region_here
 
-## 📁 Project Structure
+# Evaluation judges (via OpenRouter)
+OPENROUTER_API_KEY=your_key_here
 
-```text
+# YouTube upload (optional)
+YOUTUBE_CLIENT_SECRET_PATH=client_secret.json
+```
+
+---
+
+## Usage
+
+### Gradio UI (Recommended)
+
+```bash
+python app.py
+```
+
+Open `http://127.0.0.1:7860`. The dashboard provides pipeline controls, storyboard inspection, and an evaluation results tab.
+
+### Console
+
+```bash
+python run.py
+```
+
+The pipeline pauses at the human script review step. Edit storyboards in `output/` if needed, then press Enter to continue.
+
+### LangGraph Studio (Visual Debugging)
+
+```bash
+pip install "langgraph-cli[all]"
+langgraph dev
+```
+
+---
+
+## Project Structure
+
+```
 .
-├── run.py                 # Main entry point (Resumable workflow)
+├── app.py                     # Gradio UI entry point
+├── run.py                     # Console entry point
 ├── src/
-│   ├── graph.py           # LangGraph workflow definition (w/ interrupts)
-│   ├── state.py           # State management (AgentState & Storyboard)
-│   └── agents/            # Specialized agents (Ingest, Youtuber, etc.)
-├── remotion_project/      # Remotion/React video rendering logic
-├── output/                # Intermediate outputs, storyboards, and final videos
-├── assets/                # Static assets (logos, BGM, bg.mp4)
-└── requirements.txt       # Python dependencies
+│   ├── graph.py               # LangGraph workflow (nodes, edges, critic routing)
+│   ├── state.py               # AgentState, Storyboard, Scene models
+│   └── agents/
+│       ├── scraper.py         # RSS fetch + article scraping
+│       ├── editor.py          # Storyboard generation (Gemini)
+│       ├── script_critic.py   # Script quality critic with retry loop
+│       ├── photographer.py    # Image search and download (SerpApi)
+│       ├── image_critic.py    # Multimodal image relevance critic
+│       ├── reporter.py        # TTS audio generation (Azure)
+│       ├── batch_renderer.py  # Remotion video rendering
+│       ├── concat.py          # FFmpeg video assembly
+│       └── youtuber.py        # YouTube upload + metadata
+├── eval/
+│   ├── benchmark_articles.json  # 5 fixed articles for evaluation
+│   ├── run_eval.py              # Evaluation runner
+│   ├── score_outputs.py         # LLM-as-judge scoring
+│   ├── fetch_benchmark.py       # Benchmark refresh utility
+│   └── results/                 # Evaluation outputs (baseline/ and advanced/)
+├── remotion_project/          # React/TypeScript video rendering engine
+├── output/                    # Generated storyboards, audio, images, videos
+└── assets/                    # Static assets (BGM, background video, logos)
 ```
 
-## 📝 License
+---
+
+## License
 
 Internal Project / All Rights Reserved.

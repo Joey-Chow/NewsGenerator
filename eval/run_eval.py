@@ -102,14 +102,14 @@ def load_benchmark(path: str) -> list:
     return articles
 
 
-async def run_pipeline(articles: list, version: str) -> dict:
-    """Run the eval pipeline with benchmark articles injected as scraped_articles."""
+async def _run_single_pair(pair: list, version: str, pair_idx: int) -> dict:
+    """Run one pair of articles through the eval pipeline."""
     checkpointer = MemorySaver()
     app = build_eval_graph(version=version, checkpointer=checkpointer)
 
     initial_state = {
-        "news_urls": [a["url"] for a in articles],
-        "scraped_articles": articles,
+        "news_urls": [a["url"] for a in pair],
+        "scraped_articles": pair,
         "draft_storyboards": [],
         "photographer_storyboards": [],
         "reporter_storyboards": [],
@@ -126,7 +126,7 @@ async def run_pipeline(articles: list, version: str) -> dict:
         "is_approved": False,
     }
 
-    config = {"configurable": {"thread_id": f"eval_{version}_{int(time.time())}"}}
+    config = {"configurable": {"thread_id": f"eval_{version}_{pair_idx}_{int(time.time())}"}}
 
     start_time = time.time()
 
@@ -155,10 +155,46 @@ async def run_pipeline(articles: list, version: str) -> dict:
                     break
 
     return {
-        "version": version,
         "storyboards": storyboards,
         "elapsed_seconds": round(elapsed, 2),
         "state": last_state,
+    }
+
+
+BATCH_SIZE = 2  # Editor processes 2 articles at a time
+
+
+async def run_pipeline(articles: list, version: str) -> dict:
+    """Run the eval pipeline on articles in pairs (editor handles 2 at a time)."""
+    all_storyboards = []
+    total_elapsed = 0
+    total_script_retries = 0
+    total_image_retries = 0
+
+    for i in range(0, len(articles), BATCH_SIZE):
+        pair = articles[i:i + BATCH_SIZE]
+        pair_num = i // BATCH_SIZE + 1
+        total_pairs = (len(articles) + BATCH_SIZE - 1) // BATCH_SIZE
+        print(f"\n{'='*60}")
+        print(f"  BATCH {pair_num}/{total_pairs}: articles {i}-{i+len(pair)-1}")
+        print(f"{'='*60}")
+
+        result = await _run_single_pair(pair, version, pair_num)
+
+        all_storyboards.extend(result["storyboards"])
+        total_elapsed += result["elapsed_seconds"]
+        state = result.get("state", {})
+        total_script_retries += state.get("script_critic_retry_count", 0)
+        total_image_retries += state.get("image_critic_retry_count", 0)
+
+    return {
+        "version": version,
+        "storyboards": all_storyboards,
+        "elapsed_seconds": round(total_elapsed, 2),
+        "state": {
+            "script_critic_retry_count": total_script_retries,
+            "image_critic_retry_count": total_image_retries,
+        },
     }
 
 

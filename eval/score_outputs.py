@@ -204,8 +204,12 @@ def score_full_run(storyboards: list, articles: list, output_csv: str):
         image_scores = []
         for scene in sb.scenes:
             if scene.final_asset_path and os.path.exists(scene.final_asset_path):
-                img_score = score_image(scene.subtitle_text, scene.final_asset_path)
-                image_scores.append(img_score["relevance"])
+                try:
+                    img_score = score_image(scene.subtitle_text, scene.final_asset_path)
+                    image_scores.append(img_score["relevance"])
+                except Exception as e:
+                    print(f"    WARNING: Image scoring failed for scene {scene.id}: {e}")
+                    image_scores.append(None)
             else:
                 image_scores.append(None)
 

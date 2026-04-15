@@ -5,4 +5,6 @@ remotion_project/public/*
 .DS_Store
 remotion_project/node_modules
 剪辑/assets/
+.env
+CLAUDE.md
 

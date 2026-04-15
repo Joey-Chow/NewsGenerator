@@ -22,7 +22,7 @@ This repository contains the **advanced version** of the pipeline (`critic-agent
 - **Human-in-the-Loop (HITL)**: Manual script review gate after the script critic approves. Human feedback loops back to the editor.
 - **Parallel Execution**: After human script approval, the Photographer and Reporter (TTS) run in parallel and join at the Renderer.
 - **LLM-as-Judge Evaluation**: Separate evaluation pipeline using Claude (via OpenRouter) for script scoring and GPT-4o for image relevance scoring — different providers than the generation model (Gemini) to avoid self-evaluation bias.
-- **Benchmark Dataset**: 5 fixed articles in `eval/benchmark_articles.json` for reproducible baseline vs. advanced comparison.
+- **Benchmark Dataset**: 20 fixed articles in `eval/benchmark_articles.json` for reproducible baseline vs. advanced comparison.
 
 ---
 
@@ -87,13 +87,13 @@ Scheduler ──► Scraper ──► Editor ──► Script Critic
 
 ## Evaluation Framework
 
-Located in `eval/`. Runs both pipeline versions on the same 5 benchmark articles and scores outputs with independent LLM judges.
+Located in `eval/`. Runs both pipeline versions on the same 20 benchmark articles and scores outputs with independent LLM judges.
 
 ### Files
 
 | File | Purpose |
 |------|---------|
-| `eval/benchmark_articles.json` | 5 fixed scraped articles for reproducible evaluation |
+| `eval/benchmark_articles.json` | 20 fixed scraped articles for reproducible evaluation |
 | `eval/fetch_benchmark.py` | Script to refresh benchmark articles from live RSS |
 | `eval/run_eval.py` | Runs the pipeline on benchmark articles, saves outputs to `eval/results/` |
 | `eval/score_outputs.py` | LLM-as-judge scoring — Claude for scripts, GPT-4o for images |
@@ -152,21 +152,24 @@ cd ..
 Create a `.env` file in the project root:
 
 ```env
-# Generation
+# Generation (Gemini 2.0 Flash)
 GEMINI_API_KEY=your_key_here
 
-# Image search
-SERPAPI_KEY=your_key_here
+# Image search (SerpApi)
+SERPAPI_API_KEY=your_key_here
 
-# Text-to-speech
-AZURE_SPEECH_KEY=your_key_here
-AZURE_SPEECH_REGION=your_region_here
+# Text-to-speech (Azure Cognitive Services)
+AZURE_TTS_KEY=your_key_here
+AZURE_TTS_REGION=eastus
+AZURE_TTS_VOICE=en-US-AndrewMultilingualNeural
 
-# Evaluation judges (via OpenRouter)
+# Evaluation judges (via OpenRouter — Claude for scripts, GPT-4o for images)
 OPENROUTER_API_KEY=your_key_here
 
-# YouTube upload (optional)
-YOUTUBE_CLIENT_SECRET_PATH=client_secret.json
+# LangSmith tracing (optional)
+LANGSMITH_API_KEY=your_key_here
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=NewsGenerator
 ```
 
 ---
@@ -218,11 +221,11 @@ langgraph dev
 │       ├── concat.py          # FFmpeg video assembly
 │       └── youtuber.py        # YouTube upload + metadata
 ├── eval/
-│   ├── benchmark_articles.json  # 5 fixed articles for evaluation
+│   ├── benchmark_articles.json  # 20 fixed articles for evaluation
 │   ├── run_eval.py              # Evaluation runner
 │   ├── score_outputs.py         # LLM-as-judge scoring
 │   ├── fetch_benchmark.py       # Benchmark refresh utility
-│   └── results/                 # Evaluation outputs (baseline/ and advanced/)
+│   └── results/                 # Evaluation outputs (scores.csv + metadata.json per version)
 ├── remotion_project/          # React/TypeScript video rendering engine
 ├── output/                    # Generated storyboards, audio, images, videos
 └── assets/                    # Static assets (BGM, background video, logos)

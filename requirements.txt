@@ -3,6 +3,7 @@ langchain
 langchain-core
 langchain-google-genai
 langchain-openai
+langsmith
 playwright
 pydantic
 python-dotenv
@@ -17,3 +18,4 @@ langgraph-cli[inmem]
 google-api-python-client
 google-auth-oauthlib
 google-auth
+plotly

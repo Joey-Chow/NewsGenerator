@@ -156,6 +156,8 @@ python app.py
 
 Open `http://127.0.0.1:7860`. The dashboard provides pipeline controls and storyboard inspection.
 
+![Dashboard Screenshot](assets/dashboard.png)
+
 ### Console
 
 ```bash

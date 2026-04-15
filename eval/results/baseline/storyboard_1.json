@@ -1,0 +1,64 @@
+{
+  "title": "FIFA World Cup Ticket Sales Plagued by Technical Issues and Pricing Concerns",
+  "scenes": [
+    {
+      "id": 1,
+      "subtitle_text": "FIFA faced technical difficulties during the latest round of World Cup ticket sales, according to The Globe and Mail",
+      "image_search_query": "soccer fans entering stadium real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator-main/output/assets_final/scene_1_1.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 2,
+      "subtitle_text": "The issues arose as fans tried to access the \"last-minute sales phase\" after the final teams qualified for the expanded 48-team tournament",
+      "image_search_query": "crowd of excited soccer fans watching game real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator-main/output/assets_final/scene_1_2.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 3,
+      "subtitle_text": "Many users were misdirected to a queue intended for supporters of the six nations that qualified on Tuesday, causing significant delays",
+      "image_search_query": "frustrated soccer fans waiting in line high quality photo",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator-main/output/assets_final/scene_1_3.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 4,
+      "subtitle_text": "FIFA stated that not all remaining tickets were released and additional tickets will become available on a rolling basis throughout the tournament",
+      "image_search_query": "empty seats in soccer stadium real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator-main/output/assets_final/scene_1_4.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 5,
+      "subtitle_text": "The organization is employing dynamic pricing, which has drawn criticism for potentially making the 2026 World Cup financially inaccessible",
+      "image_search_query": "expensive tickets concert show press photo",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator-main/output/assets_final/scene_1_5.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 6,
+      "subtitle_text": "Members of the U.S Congress have voiced concerns that the dynamic pricing starkly contrasts with FIFA's mission to promote accessible soccer globally",
+      "image_search_query": "US congress members discussing important issues press photo",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator-main/output/assets_final/scene_1_6.jpg",
+      "audio_path": null,
+      "duration": null
+    },
+    {
+      "id": 7,
+      "subtitle_text": "FIFA also benefits from a 15% commission on both buyer and seller in its own resale market, sparking further debate",
+      "image_search_query": "people buying and selling tickets marketplace real life photography",
+      "final_asset_path": "/Users/guoxiaofan/Desktop/NEU/CS6180 Gen AI/Final Project/NewsGenerator-main/output/assets_final/scene_1_7.jpg",
+      "audio_path": null,
+      "duration": null
+    }
+  ],
+  "feedback": null,
+  "is_approved": false,
+  "sentences": null
+}
